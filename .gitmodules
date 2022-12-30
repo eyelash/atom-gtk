@@ -1,0 +1,3 @@
+[submodule "subprojects/atom-native"]
+	path = subprojects/atom-native
+	url = https://github.com/eyelash/atom-native.git

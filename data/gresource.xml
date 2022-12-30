@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/com/github/eyelash/atom-gtk">
+    <file>key-bindings.css</file>
+  </gresource>
+</gresources>
