@@ -2,7 +2,7 @@
 
 - [x] multiple selections
 - [ ] open/save
-- [ ] select next
+- [x] select next
 - [ ] syntax highlighting
 - [ ] copy/paste
 - [ ] undo/redo

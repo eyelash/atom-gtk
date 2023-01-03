@@ -38,6 +38,7 @@ void atom_text_editor_select_lines_containing_cursors(AtomTextEditor *);
 void atom_text_editor_consolidate_selections(AtomTextEditor *);
 void atom_text_editor_add_selection_above(AtomTextEditor *);
 void atom_text_editor_add_selection_below(AtomTextEditor *);
+void atom_text_editor_find_and_select_next(AtomTextEditor *);
 void atom_text_editor_insert_text(AtomTextEditor *, const gchar *);
 void atom_text_editor_insert_newline(AtomTextEditor *);
 void atom_text_editor_insert_newline_above(AtomTextEditor *);

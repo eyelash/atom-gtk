@@ -31,6 +31,7 @@ namespace Atom {
     public void consolidate_selections();
     public void add_selection_above();
     public void add_selection_below();
+    public void find_and_select_next();
     public void insert_text(string text);
     public void insert_newline();
     public void insert_newline_above();

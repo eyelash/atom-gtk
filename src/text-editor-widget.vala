@@ -243,6 +243,12 @@ class TextEditorWidget: Gtk.DrawingArea {
   }
 
   [Signal(action = true)]
+  public virtual signal void select_next() {
+    text_editor.find_and_select_next();
+    queue_draw();
+  }
+
+  [Signal(action = true)]
   public virtual signal void insert_newline() {
     text_editor.insert_newline();
     queue_draw();

@@ -40,6 +40,7 @@
   bind "<Primary>L" { "select-line"() };
   bind "<Alt><Shift>Up" { "add-selection-above"() };
   bind "<Alt><Shift>Down" { "add-selection-below"() };
+  bind "<Primary>D" { "select-next"() };
 }
 
 atom-text-editor-widget {

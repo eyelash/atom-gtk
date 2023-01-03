@@ -2,16 +2,19 @@
 #include <text-editor.h>
 #include <display-marker.h>
 #include <decoration-manager.h>
+#include <select-next.h>
 #include "one-dark.h"
 
 struct _AtomTextEditor {
   GObject parent_instance;
   TextEditor *text_editor;
+  SelectNext *select_next;
 };
 G_DEFINE_TYPE(AtomTextEditor, atom_text_editor, G_TYPE_OBJECT)
 
 static void atom_text_editor_dispose(GObject *gobject) {
   AtomTextEditor *self = ATOM_TEXT_EDITOR(gobject);
+  delete self->select_next;
   delete self->text_editor;
   G_OBJECT_CLASS(atom_text_editor_parent_class)->dispose(gobject);
 }
@@ -23,6 +26,7 @@ static void atom_text_editor_class_init(AtomTextEditorClass *klass) {
 
 static void atom_text_editor_init(AtomTextEditor *self) {
   self->text_editor = new TextEditor();
+  self->select_next = new SelectNext(self->text_editor);
 }
 
 AtomTextEditor *atom_text_editor_new() {
@@ -205,6 +209,10 @@ void atom_text_editor_add_selection_above(AtomTextEditor *self) {
 
 void atom_text_editor_add_selection_below(AtomTextEditor *self) {
   self->text_editor->addSelectionBelow();
+}
+
+void atom_text_editor_find_and_select_next(AtomTextEditor *self) {
+  self->select_next->findAndSelectNext();
 }
 
 void atom_text_editor_insert_text(AtomTextEditor *self, const gchar *text) {
