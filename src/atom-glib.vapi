@@ -6,6 +6,14 @@ namespace Atom {
     public void get_screen_line(int row, Pango.Layout layout);
     public void get_cursors(int row, GLib.Array<int> cursors);
     public void get_selections(int row, GLib.Array<int> selections);
+    public void set_cursor_screen_position(int row, int column);
+    public void select_to_screen_position(int row, int column, bool suppress_selection_merge = false);
+    public void select_word();
+    public void select_line();
+    public void add_cursor_at_screen_position(int row, int column);
+    public void toggle_cursor_at_screen_position(int row, int column);
+    public void merge_intersecting_selections();
+    public void finalize_selections();
     public void move_up();
     public void move_down();
     public void move_left();

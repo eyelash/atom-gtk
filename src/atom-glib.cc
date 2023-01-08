@@ -2,6 +2,7 @@
 #include <text-editor.h>
 #include <display-marker.h>
 #include <decoration-manager.h>
+#include <selection.h>
 #include <select-next.h>
 #include "one-dark.h"
 
@@ -109,6 +110,43 @@ void atom_text_editor_get_selections(AtomTextEditor *self, gint row, GArray *sel
       }
     }
   }
+}
+
+void atom_text_editor_set_cursor_screen_position(AtomTextEditor *self, gint row, gint column) {
+  self->text_editor->setCursorScreenPosition(Point(row, column));
+}
+
+void atom_text_editor_select_to_screen_position(AtomTextEditor *self, gint row, gint column, gboolean suppress_selection_merge) {
+  self->text_editor->selectToScreenPosition(Point(row, column), suppress_selection_merge);
+}
+
+void atom_text_editor_select_word(AtomTextEditor *self) {
+  self->text_editor->getLastSelection()->selectWord();
+}
+
+void atom_text_editor_select_line(AtomTextEditor *self) {
+  self->text_editor->getLastSelection()->selectLine();
+}
+
+void atom_text_editor_add_cursor_at_screen_position(AtomTextEditor *self, gint row, gint column) {
+  self->text_editor->addCursorAtScreenPosition(Point(row, column));
+}
+
+void atom_text_editor_toggle_cursor_at_screen_position(AtomTextEditor *self, gint row, gint column) {
+  Selection *selection = self->text_editor->getSelectionAtScreenPosition(Point(row, column));
+  if (selection) {
+    if (self->text_editor->hasMultipleCursors()) selection->destroy();
+  } else {
+    self->text_editor->addCursorAtScreenPosition(Point(row, column));
+  }
+}
+
+void atom_text_editor_merge_intersecting_selections(AtomTextEditor *self) {
+  self->text_editor->mergeIntersectingSelections();
+}
+
+void atom_text_editor_finalize_selections(AtomTextEditor *self) {
+  self->text_editor->finalizeSelections();
 }
 
 void atom_text_editor_move_up(AtomTextEditor *self) {

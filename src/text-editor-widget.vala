@@ -3,6 +3,7 @@ class TextEditorWidget: Gtk.DrawingArea {
   private Atom.TextEditor text_editor;
   private Gtk.IMContext im_context;
   private Gtk.GestureMultiPress multipress_gesture;
+  private Gtk.GestureDrag drag_gesture;
   private Pango.FontDescription font_description;
   private double ascent;
   private double line_height;
@@ -18,6 +19,9 @@ class TextEditorWidget: Gtk.DrawingArea {
     im_context.commit.connect(commit);
     multipress_gesture = new Gtk.GestureMultiPress(this);
     multipress_gesture.pressed.connect(handle_pressed);
+    multipress_gesture.released.connect(handle_released);
+    drag_gesture = new Gtk.GestureDrag(this);
+    drag_gesture.drag_update.connect(handle_drag_update);
     var settings = new Settings("org.gnome.desktop.interface");
     font_description = Pango.FontDescription.from_string(settings.get_string("monospace-font-name"));
     var metrics = get_pango_context().get_metrics(font_description, null);
@@ -82,7 +86,66 @@ class TextEditorWidget: Gtk.DrawingArea {
   }
 
   private void handle_pressed(int n_press, double x, double y) {
+    var event = multipress_gesture.get_last_event(multipress_gesture.get_current_sequence());
+    Gdk.ModifierType state;
+    event.get_state(out state);
+    bool modify_selection = (state & get_modifier_mask(Gdk.ModifierIntent.MODIFY_SELECTION)) != 0;
+    bool extend_selection = (state & get_modifier_mask(Gdk.ModifierIntent.EXTEND_SELECTION)) != 0;
+    int row, column;
+    get_row_and_column(x, y, out row, out column);
+    switch (n_press) {
+    case 1:
+      if (modify_selection) {
+        text_editor.toggle_cursor_at_screen_position(row, column);
+      } else {
+        if (extend_selection) {
+          text_editor.select_to_screen_position(row, column);
+        } else {
+          text_editor.set_cursor_screen_position(row, column);
+        }
+      }
+      break;
+    case 2:
+      if (modify_selection) {
+        text_editor.add_cursor_at_screen_position(row, column);
+      }
+      text_editor.select_word();
+      break;
+    case 3:
+      if (modify_selection) {
+        text_editor.add_cursor_at_screen_position(row, column);
+      }
+      text_editor.select_line();
+      break;
+    }
+    queue_draw();
+  }
 
+  private void handle_released(int n_press, double x, double y) {
+    text_editor.merge_intersecting_selections();
+    text_editor.finalize_selections();
+    queue_draw();
+  }
+
+  private void handle_drag_update(double offset_x, double offset_y) {
+    double start_x, start_y;
+    drag_gesture.get_start_point(out start_x, out start_y);
+    int row, column;
+    get_row_and_column(start_x + offset_x, start_y + offset_y, out row, out column);
+    text_editor.select_to_screen_position(row, column, true);
+    queue_draw();
+  }
+
+  private void get_row_and_column(double x, double y, out int row, out int column) {
+    row = (int)double.max((y - PADDING) / line_height, 0);
+    if (row < text_editor.get_screen_line_count()) {
+      var layout = new Pango.Layout(get_pango_context());
+      layout.set_font_description(font_description);
+      text_editor.get_screen_line(row, layout);
+      column = x_to_index(x - PADDING, layout);
+    } else {
+      column = 0;
+    }
   }
 
   private static double index_to_x(int index, Pango.Layout layout) {
@@ -90,6 +153,15 @@ class TextEditorWidget: Gtk.DrawingArea {
     int x_pos;
     layout.get_line_readonly(0).index_to_x(index, false, out x_pos);
     return Pango.units_to_double(x_pos);
+  }
+
+  private int x_to_index(double x, Pango.Layout layout) {
+    int index, trailing;
+    layout.get_line_readonly(0).x_to_index(Pango.units_from_double(x), out index, out trailing);
+    for (; trailing > 0; trailing--) {
+      layout.get_text().get_next_char(ref index, null);
+    }
+    return layout.get_text().char_count(index);
   }
 
   [Signal(action = true)]
