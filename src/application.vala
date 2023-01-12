@@ -6,6 +6,7 @@ class Application: Gtk.Application {
   public override void startup() {
     base.startup();
     load_css("/com/github/eyelash/atom-gtk/key-bindings.css");
+    load_css("/com/github/eyelash/atom-gtk/one-dark.css");
     var window = new Window(this);
     window.present();
   }

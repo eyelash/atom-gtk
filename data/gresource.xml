@@ -2,5 +2,6 @@
 <gresources>
   <gresource prefix="/com/github/eyelash/atom-gtk">
     <file>key-bindings.css</file>
+    <file>one-dark.css</file>
   </gresource>
 </gresources>

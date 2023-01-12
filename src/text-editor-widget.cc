@@ -4,7 +4,6 @@
 #include <decoration-manager.h>
 #include <selection.h>
 #include <select-next.h>
-#include "one-dark.h"
 
 #if !GLIB_CHECK_VERSION(2, 73, 2)
 #define G_CONNECT_DEFAULT ((GConnectFlags)0)
@@ -213,40 +212,99 @@ static void atom_text_editor_widget_finalize(GObject *gobject) {
   G_OBJECT_CLASS(atom_text_editor_widget_parent_class)->finalize(gobject);
 }
 
-static void to_rgba(const less::Color &color, GdkRGBA *rgba) {
-  rgba->red = red(color) / 255.0;
-  rgba->green = green(color) / 255.0;
-  rgba->blue = blue(color) / 255.0;
-  rgba->alpha = alpha(color);
+static void get_style_property_for_path(GtkWidget *widget, const std::vector<std::string> &path, const gchar *property, GValue *value) {
+  GtkStyleContext *style_context = gtk_style_context_new();
+  GtkWidgetPath *widget_path = gtk_widget_path_copy(gtk_style_context_get_path(gtk_widget_get_style_context(widget)));
+  for (const std::string &classes : path) {
+    gint iter = gtk_widget_path_append_type(widget_path, G_TYPE_NONE);
+    gtk_widget_path_iter_set_object_name(widget_path, iter, "div");
+    size_t pos = 0;
+    size_t match = classes.find(' ', pos);
+    while (match != std::string::npos) {
+      gtk_widget_path_iter_add_class(widget_path, iter, classes.substr(pos, match - pos).c_str());
+      pos = match + 1;
+      match = classes.find(' ', pos);
+    }
+    gtk_widget_path_iter_add_class(widget_path, iter, classes.substr(pos).c_str());
+  }
+  gtk_style_context_set_path(style_context, widget_path);
+  gtk_style_context_get_property(style_context, property, GTK_STATE_FLAG_NORMAL, value);
+  gtk_widget_path_free(widget_path);
+  g_object_unref(style_context);
 }
 
-static void get_screen_line(TextEditor *text_editor, double row, PangoLayout *layout) {
-  DisplayLayer *display_layer = text_editor->displayLayer;
+static void get_style_property_for_path(GtkWidget *widget, const std::vector<std::string> &path, const gchar *property, GdkRGBA *color) {
+  GValue value = G_VALUE_INIT;
+  get_style_property_for_path(widget, path, property, &value);
+  *color = *(GdkRGBA *)g_value_get_boxed(&value);
+  g_value_unset(&value);
+}
+
+static void get_style_property_for_path(GtkWidget *widget, const std::vector<std::string> &path, const gchar *property, PangoStyle *style) {
+  GValue value = G_VALUE_INIT;
+  get_style_property_for_path(widget, path, property, &value);
+  *style = (PangoStyle)g_value_get_enum(&value);
+  g_value_unset(&value);
+}
+
+static void get_style_property_for_path(GtkWidget *widget, const std::vector<std::string> &path, const gchar *property, PangoWeight *weight) {
+  GValue value = G_VALUE_INIT;
+  get_style_property_for_path(widget, path, property, &value);
+  *weight = (PangoWeight)g_value_get_enum(&value);
+  g_value_unset(&value);
+}
+
+static void emit_attributes(GtkWidget *widget, gchar *utf8, PangoAttrList *attrs, int32_t index, int32_t &last_index, const std::vector<std::string> &classes) {
+  if (index == last_index) return;
+
+  PangoStyle font_style;
+  get_style_property_for_path(widget, classes, "font-style", &font_style);
+  PangoAttribute *attr = pango_attr_style_new(font_style);
+  attr->start_index = g_utf8_offset_to_pointer(utf8, last_index) - utf8;
+  attr->end_index = g_utf8_offset_to_pointer(utf8, index) - utf8;
+  pango_attr_list_insert(attrs, attr);
+
+  PangoWeight font_weight;
+  get_style_property_for_path(widget, classes, "font-weight", &font_weight);
+  attr = pango_attr_weight_new(font_weight);
+  attr->start_index = g_utf8_offset_to_pointer(utf8, last_index) - utf8;
+  attr->end_index = g_utf8_offset_to_pointer(utf8, index) - utf8;
+  pango_attr_list_insert(attrs, attr);
+
+  GdkRGBA text_color;
+  get_style_property_for_path(widget, classes, "color", &text_color);
+  attr = pango_attr_foreground_new(text_color.red * G_MAXUINT16, text_color.green * G_MAXUINT16, text_color.blue * G_MAXUINT16);
+  attr->start_index = g_utf8_offset_to_pointer(utf8, last_index) - utf8;
+  attr->end_index = g_utf8_offset_to_pointer(utf8, index) - utf8;
+  pango_attr_list_insert(attrs, attr);
+  attr = pango_attr_foreground_alpha_new(text_color.alpha * G_MAXUINT16);
+  attr->start_index = g_utf8_offset_to_pointer(utf8, last_index) - utf8;
+  attr->end_index = g_utf8_offset_to_pointer(utf8, index) - utf8;
+  pango_attr_list_insert(attrs, attr);
+
+  last_index = index;
+}
+
+static PangoLayout *get_screen_line(AtomTextEditorWidget *self, double row) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  PangoLayout *layout = pango_layout_new(gtk_widget_get_pango_context(GTK_WIDGET(self)));
+  pango_layout_set_font_description(layout, priv->font_description);
+  DisplayLayer *display_layer = priv->text_editor->displayLayer;
   auto screen_line = display_layer->getScreenLine(row);
   const std::u16string &text = screen_line.lineText;
   gchar *utf8 = g_utf16_to_utf8((const gunichar2 *)text.c_str(), text.size(), NULL, NULL, NULL);
   pango_layout_set_text(layout, utf8, -1);
   PangoAttrList *attrs = pango_attr_list_new();
   int32_t index = 0;
-  int32_t start;
+  int32_t last_index = 0;
+  std::vector<std::string> classes;
   for (int32_t tag : screen_line.tags) {
     if (display_layer->isOpenTag(tag)) {
-      start = index;
+      emit_attributes(GTK_WIDGET(self), utf8, attrs, index, last_index, classes);
+      classes.push_back(display_layer->classNameForTag(tag));
     } else if (display_layer->isCloseTag(tag)) {
-      PangoAttribute *attr = pango_attr_foreground_new(
-        red(one_dark::syntax_invisible_character_color) / 255.0 * G_MAXUINT16,
-        green(one_dark::syntax_invisible_character_color) / 255.0 * G_MAXUINT16,
-        blue(one_dark::syntax_invisible_character_color) / 255.0 * G_MAXUINT16
-      );
-      attr->start_index = g_utf8_offset_to_pointer(utf8, start) - utf8;
-      attr->end_index = g_utf8_offset_to_pointer(utf8, index) - utf8;
-      pango_attr_list_insert(attrs, attr);
-      attr = pango_attr_foreground_alpha_new(
-        alpha(one_dark::syntax_invisible_character_color) * G_MAXUINT16
-      );
-      attr->start_index = g_utf8_offset_to_pointer(utf8, start) - utf8;
-      attr->end_index = g_utf8_offset_to_pointer(utf8, index) - utf8;
-      pango_attr_list_insert(attrs, attr);
+      emit_attributes(GTK_WIDGET(self), utf8, attrs, index, last_index, classes);
+      classes.pop_back();
     } else {
       index += tag;
     }
@@ -254,6 +312,7 @@ static void get_screen_line(TextEditor *text_editor, double row, PangoLayout *la
   pango_layout_set_attributes(layout, attrs);
   pango_attr_list_unref(attrs);
   g_free(utf8);
+  return layout;
 }
 
 static bool is_cursor(const std::pair<DisplayMarker *, std::vector<Decoration::Properties>> &decoration) {
@@ -299,19 +358,14 @@ static std::vector<double> get_selections(TextEditor *text_editor, double row) {
 
 static gboolean atom_text_editor_widget_draw(GtkWidget *widget, cairo_t *cr) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(widget);
-  GdkRGBA background_color;
-  to_rgba(one_dark::syntax_background_color, &background_color);
-  gdk_cairo_set_source_rgba(cr, &background_color);
-  cairo_paint(cr);
+  gtk_render_background(gtk_widget_get_style_context(widget), cr, 0, 0, gtk_widget_get_allocated_width(widget), gtk_widget_get_allocated_height(widget));
   for (double row = 0; row < priv->text_editor->getScreenLineCount(); row++) {
     double y = PADDING + row * priv->line_height;
-    PangoLayout *layout = pango_layout_new(gtk_widget_get_pango_context(widget));
-    pango_layout_set_font_description(layout, priv->font_description);
-    get_screen_line(priv->text_editor, row, layout);
+    PangoLayout *layout = get_screen_line(ATOM_TEXT_EDITOR_WIDGET(widget), row);
 
     auto selections = get_selections(priv->text_editor, row);
     GdkRGBA selection_color;
-    to_rgba(one_dark::syntax_selection_color, &selection_color);
+    get_style_property_for_path(widget, {"highlight selection", "region selection"}, "background-color", &selection_color);
     gdk_cairo_set_source_rgba(cr, &selection_color);
     for (size_t i = 0; i + 1 < selections.size(); i += 2) {
       double x = PADDING + index_to_x(selections[i], layout);
@@ -321,14 +375,14 @@ static gboolean atom_text_editor_widget_draw(GtkWidget *widget, cairo_t *cr) {
     }
 
     GdkRGBA text_color;
-    to_rgba(one_dark::syntax_text_color, &text_color);
+    get_style_property_for_path(widget, {}, "color", &text_color);
     gdk_cairo_set_source_rgba(cr, &text_color);
     cairo_move_to(cr, PADDING, y + priv->ascent);
     pango_cairo_show_layout_line(cr, pango_layout_get_line_readonly(layout, 0));
 
     auto cursors = get_cursors(priv->text_editor, row);
     GdkRGBA cursor_color;
-    to_rgba(one_dark::syntax_cursor_color, &cursor_color);
+    get_style_property_for_path(widget, {"cursor"}, "border-left-color", &cursor_color);
     gdk_cairo_set_source_rgba(cr, &cursor_color);
     for (size_t i = 0; i < cursors.size(); i++) {
       double x = PADDING + index_to_x(cursors[i], layout);
@@ -433,9 +487,7 @@ static void get_row_and_column(AtomTextEditorWidget *self, double x, double y, i
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   row = MAX((y - PADDING) / priv->line_height, 0.0);
   if (row < priv->text_editor->getScreenLineCount()) {
-    PangoLayout *layout = pango_layout_new(gtk_widget_get_pango_context(GTK_WIDGET(self)));
-    pango_layout_set_font_description(layout, priv->font_description);
-    get_screen_line(priv->text_editor, row, layout);
+    PangoLayout *layout = get_screen_line(self, row);
     column = x_to_index(x - PADDING, layout);
     g_object_unref(layout);
   } else {
