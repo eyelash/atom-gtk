@@ -233,6 +233,13 @@ static void get_style_property_for_path(GtkWidget *widget, const std::vector<std
   g_object_unref(style_context);
 }
 
+static void get_style_property_for_path(GtkWidget *widget, const std::vector<std::string> &path, const gchar *property, gint *integer) {
+  GValue value = G_VALUE_INIT;
+  get_style_property_for_path(widget, path, property, &value);
+  *integer = g_value_get_int(&value);
+  g_value_unset(&value);
+}
+
 static void get_style_property_for_path(GtkWidget *widget, const std::vector<std::string> &path, const gchar *property, GdkRGBA *color) {
   GValue value = G_VALUE_INIT;
   get_style_property_for_path(widget, path, property, &value);
@@ -285,12 +292,11 @@ static void emit_attributes(GtkWidget *widget, gchar *utf8, PangoAttrList *attrs
   last_index = index;
 }
 
-static PangoLayout *get_screen_line(AtomTextEditorWidget *self, double row) {
+static PangoLayout *get_screen_line(AtomTextEditorWidget *self, const DisplayLayer::ScreenLine &screen_line) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   PangoLayout *layout = pango_layout_new(gtk_widget_get_pango_context(GTK_WIDGET(self)));
   pango_layout_set_font_description(layout, priv->font_description);
   DisplayLayer *display_layer = priv->text_editor->displayLayer;
-  auto screen_line = display_layer->getScreenLine(row);
   const std::u16string &text = screen_line.lineText;
   gchar *utf8 = g_utf16_to_utf8((const gunichar2 *)text.c_str(), text.size(), NULL, NULL, NULL);
   pango_layout_set_text(layout, utf8, -1);
@@ -315,82 +321,210 @@ static PangoLayout *get_screen_line(AtomTextEditorWidget *self, double row) {
   return layout;
 }
 
-static bool is_cursor(const std::pair<DisplayMarker *, std::vector<Decoration::Properties>> &decoration) {
-  for (const auto &property: decoration.second) {
-    if (property.type == Decoration::Type::cursor) {
-      return true;
-    }
-  }
-  return false;
+static PangoLayout *get_screen_line(AtomTextEditorWidget *self, double row) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  return get_screen_line(self, priv->text_editor->displayLayer->getScreenLine(row));
 }
 
-static std::vector<double> get_cursors(TextEditor *text_editor, double row) {
-  std::vector<double> cursors;
-  auto decorations_by_marker = text_editor->decorationManager->decorationPropertiesByMarkerForScreenRowRange(row, row + 1);
-  for (const auto &decoration: decorations_by_marker) {
-    if (is_cursor(decoration)) {
-      Point head = decoration.first->getHeadScreenPosition();
-      if (head.row == row) {
-        cursors.push_back(head.column);
+static Range constrain_range_to_rows(Range range, double start_row, double end_row) {
+  if (range.start.row < start_row || range.end.row >= end_row) {
+    if (range.start.row < start_row) {
+      range.start.row = start_row;
+      range.start.column = 0;
+    }
+    if (range.end.row >= end_row) {
+      range.end.row = end_row;
+      range.end.column = 0;
+    }
+  }
+  return range;
+}
+
+static void add_class(std::string &classes, const char *class_) {
+  if (!classes.empty()) {
+    classes += ' ';
+  }
+  classes += class_;
+}
+
+static void parse_decoration(
+  double start_row,
+  double end_row,
+  const std::pair<DisplayMarker *, std::vector<Decoration::Properties>> &decoration,
+  std::vector<std::string> &line_classes,
+  std::vector<std::string> &gutter_classes,
+  std::vector<std::pair<Range, const char *>> &highlights,
+  std::vector<std::vector<int32_t>> &cursors
+) {
+  DisplayMarker *marker = decoration.first;
+  for (const auto &properties : decoration.second) {
+    switch(properties.type) {
+    case Decoration::Type::line:
+    case Decoration::Type::line_number:
+      {
+        const Range range = marker->getScreenRange();
+        const bool reversed = marker->isReversed();
+
+        bool omit_last_row = false;
+        if (range.isEmpty()) {
+          if (properties.onlyNonEmpty) continue;
+        } else {
+          if (properties.onlyEmpty) continue;
+          if (properties.omitEmptyLastRow) {
+            omit_last_row = range.end.column == 0;
+          }
+        }
+
+        double range_start_row = range.start.row;
+        double range_end_row = range.end.row;
+        if (properties.onlyHead) {
+          if (reversed) {
+            range_end_row = range_start_row;
+          } else {
+            range_start_row = range_end_row;
+          }
+        }
+        range_start_row = std::max(range_start_row, start_row);
+        range_end_row = std::min(range_end_row, end_row - 1);
+        for (double row = range_start_row; row <= range_end_row; row++) {
+          if (omit_last_row && row == range.end.row) break;
+          if (properties.type == Decoration::Type::line) {
+            add_class(line_classes[row - start_row], properties.class_);
+          } else {
+            add_class(gutter_classes[row - start_row], properties.class_);
+          }
+        }
+        break;
+      }
+    case Decoration::Type::highlight:
+      {
+        const Range range = constrain_range_to_rows(marker->getScreenRange(), start_row, end_row);
+        if (range.isEmpty()) continue;
+        highlights.push_back({range, properties.class_});
+        break;
+      }
+    case Decoration::Type::cursor:
+      {
+        const Point position = marker->getHeadScreenPosition();
+        if (position.row < start_row || position.row >= end_row) continue;
+        cursors[position.row - start_row].push_back(position.column);
+        break;
+      }
+    default:
+      break;
+    }
+  }
+}
+
+static void draw_lines(
+  GtkWidget *widget,
+  cairo_t *cr,
+  double allocated_width,
+  double start_row,
+  double end_row,
+  const std::vector<std::string> &line_classes,
+  const std::vector<std::pair<Range, const char *>> &highlights,
+  const std::vector<std::vector<int32_t>> &cursors,
+  const std::vector<PangoLayout *> &layouts
+) {
+  AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(widget);
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  for (const auto &highlight : highlights) {
+    const Range range = highlight.first;
+    const char *class_ = highlight.second;
+    GdkRGBA background_color;
+    std::vector<std::string> path;
+    path.push_back(std::string("highlight ") + class_);
+    path.push_back(std::string("region ") + class_);
+    get_style_property_for_path(widget, path, "background-color", &background_color);
+    gdk_cairo_set_source_rgba(cr, &background_color);
+    double y_start = range.start.row * priv->line_height;
+    double y_end = y_start + priv->line_height;
+    double x_start = index_to_x(range.start.column, layouts[range.start.row - start_row]);
+    if (range.start.row == range.end.row) {
+      double x_end = index_to_x(range.end.column, layouts[range.start.row - start_row]);
+      cairo_rectangle(cr, x_start, y_start, x_end - x_start, y_end - y_start);
+    } else {
+      double x_end = allocated_width;
+      cairo_rectangle(cr, x_start, y_start, x_end - x_start, y_end - y_start);
+      y_start = y_end;
+      x_start = 0;
+      if (range.end.row > range.start.row + 1) {
+        y_end = range.end.row * priv->line_height;
+        cairo_rectangle(cr, x_start, y_start, x_end - x_start, y_end - y_start);
+        y_start = y_end;
+      }
+      if (range.end.column > 0) {
+        y_end = y_start + priv->line_height;
+        x_end = index_to_x(range.end.column, layouts[range.end.row - start_row]);
+        cairo_rectangle(cr, x_start, y_start, x_end - x_start, y_end - y_start);
       }
     }
+    cairo_fill(cr);
   }
-  return cursors;
-}
-
-static std::vector<double> get_selections(TextEditor *text_editor, double row) {
-  std::vector<double> selections;
-  const double line_length = text_editor->lineLengthForScreenRow(row);
-  auto decorations_by_marker = text_editor->decorationManager->decorationPropertiesByMarkerForScreenRowRange(row, row + 1);
-  for (const auto &decoration: decorations_by_marker) {
-    if (is_cursor(decoration)) {
-      Range range = decoration.first->getScreenRange();
-      if (range.start.row <= row && range.end.row >= row) {
-        double start_column = range.start.row < row ? 0 : range.start.column;
-        double end_column = range.end.row > row ? line_length : range.end.column;
-        selections.push_back(start_column);
-        selections.push_back(end_column);
-      }
-    }
-  }
-  return selections;
-}
-
-static gboolean atom_text_editor_widget_draw(GtkWidget *widget, cairo_t *cr) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(widget);
-  gtk_render_background(gtk_widget_get_style_context(widget), cr, 0, 0, gtk_widget_get_allocated_width(widget), gtk_widget_get_allocated_height(widget));
-  for (double row = 0; row < priv->text_editor->getScreenLineCount(); row++) {
-    double y = PADDING + row * priv->line_height;
-    PangoLayout *layout = get_screen_line(ATOM_TEXT_EDITOR_WIDGET(widget), row);
-
-    auto selections = get_selections(priv->text_editor, row);
-    GdkRGBA selection_color;
-    get_style_property_for_path(widget, {"highlight selection", "region selection"}, "background-color", &selection_color);
-    gdk_cairo_set_source_rgba(cr, &selection_color);
-    for (size_t i = 0; i + 1 < selections.size(); i += 2) {
-      double x = PADDING + index_to_x(selections[i], layout);
-      double width = PADDING + index_to_x(selections[i + 1], layout) - x;
-      cairo_rectangle(cr, x, y, width, priv->line_height);
+  for (double row = start_row; row < end_row; row++) {
+    double y = row * priv->line_height;
+    if (!line_classes[row - start_row].empty()) {
+      GdkRGBA background_color;
+      get_style_property_for_path(widget, {"line " + line_classes[row - start_row]}, "background-color", &background_color);
+      gdk_cairo_set_source_rgba(cr, &background_color);
+      cairo_rectangle(cr, 0, y, allocated_width, priv->line_height);
       cairo_fill(cr);
     }
-
     GdkRGBA text_color;
     get_style_property_for_path(widget, {}, "color", &text_color);
     gdk_cairo_set_source_rgba(cr, &text_color);
-    cairo_move_to(cr, PADDING, y + priv->ascent);
-    pango_cairo_show_layout_line(cr, pango_layout_get_line_readonly(layout, 0));
-
-    auto cursors = get_cursors(priv->text_editor, row);
+    cairo_move_to(cr, 0, y + priv->ascent);
+    pango_cairo_show_layout_line(cr, pango_layout_get_line_readonly(layouts[row - start_row], 0));
+  }
+  for (double row = start_row; row < end_row; row++) {
+    double y = row * priv->line_height;
     GdkRGBA cursor_color;
     get_style_property_for_path(widget, {"cursor"}, "border-left-color", &cursor_color);
+    gint cursor_width;
+    get_style_property_for_path(widget, {"cursor"}, "border-left-width", &cursor_width);
     gdk_cairo_set_source_rgba(cr, &cursor_color);
-    for (size_t i = 0; i < cursors.size(); i++) {
-      double x = PADDING + index_to_x(cursors[i], layout);
-      cairo_rectangle(cr, x - 1, y, 2, priv->line_height);
+    for (int32_t cursor : cursors[row - start_row]) {
+      double x = index_to_x(cursor, layouts[row - start_row]);
+      cairo_rectangle(cr, x, y, cursor_width, priv->line_height);
       cairo_fill(cr);
     }
+  }
+}
 
-    g_object_unref(layout);
+static gboolean atom_text_editor_widget_draw(GtkWidget *widget, cairo_t *cr) {
+  AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(widget);
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+
+  double start_row = 0;
+  double end_row = priv->text_editor->getScreenLineCount();
+  auto screen_lines = priv->text_editor->displayLayer->getScreenLines(start_row, end_row);
+  auto decorations = priv->text_editor->decorationManager->decorationPropertiesByMarkerForScreenRowRange(start_row, end_row);
+
+  std::vector<std::string> line_classes(screen_lines.size());
+  std::vector<std::string> gutter_classes(screen_lines.size());
+  std::vector<std::pair<Range, const char *>> highlights;
+  std::vector<std::vector<int32_t>> cursors(screen_lines.size());
+  for (const auto &decoration : decorations) {
+    parse_decoration(start_row, end_row, decoration, line_classes, gutter_classes, highlights, cursors);
+  }
+
+  std::vector<PangoLayout *> layouts;
+  for (size_t i = 0; i < screen_lines.size(); i++) {
+    layouts.push_back(get_screen_line(self, screen_lines[i]));
+  }
+
+  const double allocated_width = gtk_widget_get_allocated_width(widget);
+  const double allocated_height = gtk_widget_get_allocated_height(widget);
+  gtk_render_background(gtk_widget_get_style_context(widget), cr, 0, 0, allocated_width, allocated_height);
+
+  cairo_save(cr);
+  cairo_translate(cr, PADDING, PADDING);
+  draw_lines(widget, cr, allocated_width - PADDING, start_row, end_row, line_classes, highlights, cursors, layouts);
+  cairo_restore(cr);
+
+  for (size_t i = 0; i < layouts.size(); i++) {
+    g_object_unref(layouts[i]);
   }
   return GDK_EVENT_STOP;
 }

@@ -43,9 +43,15 @@ $syntax-selection-flash-color: $syntax-accent;
 
 $syntax-invisible-character-color: $syntax-guide;
 
+$syntax-cursor-line: hsla($syntax-hue, 100%,  80%, .04); // needs to be semi-transparent to show search results
+
 atom-text-editor-widget {
   background-color: $syntax-background-color;
   color: $syntax-text-color;
+
+  .line.cursor-line {
+    background-color: $syntax-cursor-line;
+  }
 
   .cursor {
     border-left: 2px solid $syntax-cursor-color;
