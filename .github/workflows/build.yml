@@ -1,0 +1,12 @@
+name: build
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - run: sudo apt-get update && sudo apt-get install meson valac sassc libgtk-3-dev
+      - run: meson setup build
+      - run: ninja -C build
