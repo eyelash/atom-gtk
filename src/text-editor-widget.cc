@@ -9,6 +9,8 @@
 #define G_CONNECT_DEFAULT ((GConnectFlags)0)
 #endif
 
+#define LINE_HEIGHT_FACTOR 1.25
+
 typedef struct {
   GtkDrawingArea parent_instance;
   TextEditor *text_editor;
@@ -187,8 +189,10 @@ static void atom_text_editor_widget_init(AtomTextEditorWidget *self) {
   priv->font_description = pango_font_description_from_string(monospace_font_name);
   g_free(monospace_font_name);
   PangoFontMetrics *metrics = pango_context_get_metrics(gtk_widget_get_pango_context(GTK_WIDGET(self)), priv->font_description, NULL);
-  priv->ascent = pango_units_to_double(pango_font_metrics_get_ascent(metrics));
-  priv->line_height = pango_units_to_double(pango_font_metrics_get_ascent(metrics) + pango_font_metrics_get_descent(metrics));
+  const double ascent = pango_units_to_double(pango_font_metrics_get_ascent(metrics));
+  const double line_height = pango_units_to_double(pango_font_metrics_get_ascent(metrics) + pango_font_metrics_get_descent(metrics));
+  priv->ascent = round(ascent + line_height * (LINE_HEIGHT_FACTOR - 1) * 0.5);
+  priv->line_height = round(line_height * LINE_HEIGHT_FACTOR);
   priv->char_width = pango_units_to_double(pango_font_metrics_get_approximate_char_width(metrics));
   pango_font_metrics_unref(metrics);
   gtk_widget_set_can_focus(GTK_WIDGET(self), TRUE);
