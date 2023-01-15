@@ -43,6 +43,12 @@ $syntax-selection-flash-color: $syntax-accent;
 
 $syntax-invisible-character-color: $syntax-guide;
 
+// Gutter colors
+$syntax-gutter-text-color:                $syntax-gutter;
+$syntax-gutter-text-color-selected:       $syntax-fg;
+$syntax-gutter-background-color:          $syntax-bg; // unused
+$syntax-gutter-background-color-selected: lighten($syntax-bg, 8%);
+
 $syntax-cursor-line: hsla($syntax-hue, 100%,  80%, .04); // needs to be semi-transparent to show search results
 
 atom-text-editor-widget {
@@ -63,5 +69,19 @@ atom-text-editor-widget {
 
   .invisible-character {
     color: $syntax-invisible-character-color;
+  }
+
+  .gutter {
+    .line-number {
+      color: $syntax-gutter-text-color;
+
+      &.cursor-line {
+        color: $syntax-gutter-text-color-selected;
+        background-color: $syntax-gutter-background-color-selected;
+      }
+      &.cursor-line-no-selection {
+        background-color: transparent;
+      }
+    }
   }
 }

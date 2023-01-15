@@ -9,8 +9,6 @@
 #define G_CONNECT_DEFAULT ((GConnectFlags)0)
 #endif
 
-#define PADDING ((double)12)
-
 typedef struct {
   GtkDrawingArea parent_instance;
   TextEditor *text_editor;
@@ -347,6 +345,15 @@ static void add_class(std::string &classes, const char *class_) {
   classes += class_;
 }
 
+static int count_digits(int n) {
+  int digits = 1;
+  while (n >= 10) {
+    digits++;
+    n /= 10;
+  }
+  return digits;
+}
+
 static void parse_decoration(
   double start_row,
   double end_row,
@@ -413,6 +420,48 @@ static void parse_decoration(
     default:
       break;
     }
+  }
+}
+
+static void draw_gutter(
+  GtkWidget *widget,
+  cairo_t *cr,
+  double padding,
+  double allocated_width,
+  double start_row,
+  double end_row,
+  const std::vector<std::string> &gutter_classes
+) {
+  AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(widget);
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  for (double row = start_row; row < end_row; row++) {
+    double y = row * priv->line_height;
+    if (!gutter_classes[row - start_row].empty()) {
+      GdkRGBA background_color;
+      get_style_property_for_path(widget, {"gutter", "line-number " + gutter_classes[row - start_row]}, "background-color", &background_color);
+      gdk_cairo_set_source_rgba(cr, &background_color);
+      cairo_rectangle(cr, 0, y, allocated_width, priv->line_height);
+      cairo_fill(cr);
+    }
+    PangoLayout *layout = pango_layout_new(gtk_widget_get_pango_context(widget));
+    pango_layout_set_font_description(layout, priv->font_description);
+    double buffer_row = priv->text_editor->bufferRowForScreenRow(row);
+    if (row > 0 && buffer_row == priv->text_editor->bufferRowForScreenRow(row - 1)) {
+      pango_layout_set_text(layout, u8"\u2022", -1);
+    } else {
+      gchar *text = g_strdup_printf("%d", (gint)buffer_row + 1);
+      pango_layout_set_text(layout, text, -1);
+      g_free(text);
+    }
+    GdkRGBA text_color;
+    get_style_property_for_path(widget, {"gutter", "line-number " + gutter_classes[row - start_row]}, "color", &text_color);
+    gdk_cairo_set_source_rgba(cr, &text_color);
+    PangoLayoutLine *layout_line = pango_layout_get_line_readonly(layout, 0);
+    PangoRectangle rectangle;
+    pango_layout_line_get_pixel_extents(layout_line, NULL, &rectangle);
+    cairo_move_to(cr, allocated_width - padding * 2 - rectangle.width, y + priv->ascent);
+    pango_cairo_show_layout_line(cr, layout_line);
+    g_object_unref(layout);
   }
 }
 
@@ -516,11 +565,18 @@ static gboolean atom_text_editor_widget_draw(GtkWidget *widget, cairo_t *cr) {
 
   const double allocated_width = gtk_widget_get_allocated_width(widget);
   const double allocated_height = gtk_widget_get_allocated_height(widget);
+  const double padding = round(priv->char_width);
+  const double gutter_width = padding * 4 + round(count_digits(priv->text_editor->getScreenLineCount()) * priv->char_width);
+
   gtk_render_background(gtk_widget_get_style_context(widget), cr, 0, 0, allocated_width, allocated_height);
 
   cairo_save(cr);
-  cairo_translate(cr, PADDING, PADDING);
-  draw_lines(widget, cr, allocated_width - PADDING, start_row, end_row, line_classes, highlights, cursors, layouts);
+  cairo_translate(cr, 0, padding);
+  draw_gutter(widget, cr, padding, gutter_width, start_row, end_row, gutter_classes);
+  cairo_restore(cr);
+  cairo_save(cr);
+  cairo_translate(cr, gutter_width, padding);
+  draw_lines(widget, cr, allocated_width - gutter_width, start_row, end_row, line_classes, highlights, cursors, layouts);
   cairo_restore(cr);
 
   for (size_t i = 0; i < layouts.size(); i++) {
@@ -619,10 +675,12 @@ static void atom_text_editor_widget_handle_drag_update(GtkGestureDrag *drag_gest
 
 static void get_row_and_column(AtomTextEditorWidget *self, double x, double y, int &row, int &column) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  row = MAX((y - PADDING) / priv->line_height, 0.0);
+  const double padding = round(priv->char_width);
+  const double gutter_width = padding * 4 + round(count_digits(priv->text_editor->getScreenLineCount()) * priv->char_width);
+  row = MAX((y - padding) / priv->line_height, 0.0);
   if (row < priv->text_editor->getScreenLineCount()) {
     PangoLayout *layout = get_screen_line(self, row);
-    column = x_to_index(x - PADDING, layout);
+    column = x_to_index(x - gutter_width, layout);
     g_object_unref(layout);
   } else {
     column = 0;
