@@ -436,6 +436,7 @@ static void draw_gutter(
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   for (double row = start_row; row < end_row; row++) {
     double y = row * priv->line_height;
+    cairo_push_group(cr);
     if (!gutter_classes[row - start_row].empty()) {
       GdkRGBA background_color;
       get_style_property_for_path(widget, {"gutter", "line-number " + gutter_classes[row - start_row]}, "background-color", &background_color);
@@ -462,6 +463,8 @@ static void draw_gutter(
     cairo_move_to(cr, allocated_width - padding * 2 - rectangle.width, y + priv->ascent);
     pango_cairo_show_layout_line(cr, layout_line);
     g_object_unref(layout);
+    cairo_pop_group_to_source(cr);
+    cairo_paint_with_alpha(cr, 0.6);
   }
 }
 
