@@ -5,6 +5,7 @@ class Application: Gtk.Application {
 
   public override void startup() {
     base.startup();
+    Gtk.Settings.get_default().gtk_application_prefer_dark_theme = true;
     load_css("/com/github/eyelash/atom-gtk/key-bindings.css");
     load_css("/com/github/eyelash/atom-gtk/one-dark.css");
     var window = new Window(this);
