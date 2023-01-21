@@ -50,7 +50,9 @@ struct _AtomTextEditorWidgetClass {
   void (*move_line_down)(AtomTextEditorWidget *);
 };
 
-AtomTextEditorWidget *atom_text_editor_widget_new(void);
+AtomTextEditorWidget *atom_text_editor_widget_new(GFile *);
+gboolean atom_text_editor_widget_save(AtomTextEditorWidget *);
+void atom_text_editor_widget_save_as(AtomTextEditorWidget *, GFile *);
 
 G_END_DECLS
 

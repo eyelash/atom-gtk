@@ -8,12 +8,18 @@ class Application: Gtk.Application {
     Gtk.Settings.get_default().gtk_application_prefer_dark_theme = true;
     load_css("/com/github/eyelash/atom-gtk/key-bindings.css");
     load_css("/com/github/eyelash/atom-gtk/one-dark.css");
+  }
+
+  public override void activate() {
     var window = new Window(this);
     window.present();
   }
 
-  public override void activate() {
-
+  public override void open(File[] files, string hint) {
+    foreach (var file in files) {
+      var window = new Window(this, file);
+      window.present();
+    }
   }
 
   private void load_css(string resource_path) {

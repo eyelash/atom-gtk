@@ -79,8 +79,18 @@ static void atom_text_editor_widget_duplicate_lines(AtomTextEditorWidget *);
 static void atom_text_editor_widget_move_line_up(AtomTextEditorWidget *);
 static void atom_text_editor_widget_move_line_down(AtomTextEditorWidget *);
 
-AtomTextEditorWidget *atom_text_editor_widget_new() {
-  return ATOM_TEXT_EDITOR_WIDGET(g_object_new(ATOM_TYPE_TEXT_EDITOR_WIDGET, NULL));
+AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
+  AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(g_object_new(ATOM_TYPE_TEXT_EDITOR_WIDGET, NULL));
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  if (file) {
+    gchar *path = g_file_get_path(file);
+    priv->text_editor = new TextEditor(TextBuffer::loadSync(path));
+    g_free(path);
+  } else {
+    priv->text_editor = new TextEditor();
+  }
+  priv->select_next = new SelectNext(priv->text_editor);
+  return self;
 }
 
 #define ADD_SIGNAL(name, vfunc) g_signal_new(name, ATOM_TYPE_TEXT_EDITOR_WIDGET, (GSignalFlags)(G_SIGNAL_RUN_LAST | G_SIGNAL_ACTION), G_STRUCT_OFFSET(AtomTextEditorWidgetClass, vfunc), NULL, NULL, NULL, G_TYPE_NONE, 0)
@@ -174,8 +184,6 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
 
 static void atom_text_editor_widget_init(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor = new TextEditor();
-  priv->select_next = new SelectNext(priv->text_editor);
   priv->im_context = gtk_im_multicontext_new();
   g_signal_connect_object(priv->im_context, "commit", G_CALLBACK(atom_text_editor_widget_commit), self, G_CONNECT_DEFAULT);
   priv->multipress_gesture = gtk_gesture_multi_press_new(GTK_WIDGET(self));
@@ -216,6 +224,22 @@ static void atom_text_editor_widget_finalize(GObject *gobject) {
   delete priv->select_next;
   delete priv->text_editor;
   G_OBJECT_CLASS(atom_text_editor_widget_parent_class)->finalize(gobject);
+}
+
+gboolean atom_text_editor_widget_save(AtomTextEditorWidget *self) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  if (!priv->text_editor->getPath()) {
+    return FALSE;
+  }
+  priv->text_editor->save();
+  return TRUE;
+}
+
+void atom_text_editor_widget_save_as(AtomTextEditorWidget *self, GFile *file) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  gchar *path = g_file_get_path(file);
+  priv->text_editor->saveAs(path);
+  g_free(path);
 }
 
 static void get_style_property_for_path(GtkWidget *widget, const std::vector<std::string> &path, const gchar *property, GValue *value) {
