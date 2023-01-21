@@ -51,7 +51,7 @@ $syntax-gutter-background-color-selected: lighten($syntax-bg, 8%);
 
 $syntax-cursor-line: hsla($syntax-hue, 100%,  80%, .04); // needs to be semi-transparent to show search results
 
-atom-text-editor-widget {
+atom-text-editor {
   background-color: $syntax-background-color;
   color: $syntax-text-color;
 

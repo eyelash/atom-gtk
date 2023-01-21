@@ -15,13 +15,13 @@ executable(
       output: 'one-dark.css',
       command: [find_program('sassc'), '@INPUT@', '@OUTPUT@']
     ),
-    source_dir: 'data'
+    source_dir: 'data',
   ),
   include_directories: include_directories(
     'src'
   ),
   dependencies: [
     subproject('atom-native').get_variable('atom_dependency'),
-    dependency('gtk+-3.0')
-  ]
+    dependency('gtk+-3.0'),
+  ],
 )

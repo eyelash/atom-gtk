@@ -1,4 +1,4 @@
-class Application: Gtk.Application {
+class Application : Gtk.Application {
   public Application() {
     Object(application_id: "com.github.eyelash.atom-gtk", flags: ApplicationFlags.HANDLES_OPEN);
   }
@@ -12,12 +12,14 @@ class Application: Gtk.Application {
 
   public override void activate() {
     var window = new Window(this);
+    window.show_all();
     window.present();
   }
 
   public override void open(File[] files, string hint) {
     foreach (var file in files) {
       var window = new Window(this, file);
+      window.show_all();
       window.present();
     }
   }

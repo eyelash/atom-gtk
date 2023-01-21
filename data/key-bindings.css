@@ -1,4 +1,4 @@
-@binding-set atom-text-editor-widget-key-bindings {
+@binding-set atom-text-editor-key-bindings {
   bind "Up" { "move-up"() };
   bind "Down" { "move-down"() };
   bind "Left" { "move-left"() };
@@ -47,6 +47,6 @@
   bind "<Primary>D" { "select-next"() };
 }
 
-atom-text-editor-widget {
-  -gtk-key-bindings: atom-text-editor-widget-key-bindings;
+atom-text-editor {
+  -gtk-key-bindings: atom-text-editor-key-bindings;
 }

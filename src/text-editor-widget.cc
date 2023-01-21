@@ -218,7 +218,7 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   g_object_class_override_property(G_OBJECT_CLASS(klass), PROP_VADJUSTMENT, "vadjustment");
   g_object_class_override_property(G_OBJECT_CLASS(klass), PROP_HSCROLL_POLICY, "hscroll-policy");
   g_object_class_override_property(G_OBJECT_CLASS(klass), PROP_VSCROLL_POLICY, "vscroll-policy");
-  gtk_widget_class_set_css_name(GTK_WIDGET_CLASS(klass), "atom-text-editor-widget");
+  gtk_widget_class_set_css_name(GTK_WIDGET_CLASS(klass), "atom-text-editor");
 }
 
 static void atom_text_editor_widget_init(AtomTextEditorWidget *self) {
@@ -252,12 +252,12 @@ static void atom_text_editor_widget_init(AtomTextEditorWidget *self) {
   gtk_widget_add_events(GTK_WIDGET(self), GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK);
 }
 
-static void atom_text_editor_widget_dispose(GObject *gobject) {
-  G_OBJECT_CLASS(atom_text_editor_widget_parent_class)->dispose(gobject);
+static void atom_text_editor_widget_dispose(GObject *object) {
+  G_OBJECT_CLASS(atom_text_editor_widget_parent_class)->dispose(object);
 }
 
-static void atom_text_editor_widget_finalize(GObject *gobject) {
-  AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(gobject);
+static void atom_text_editor_widget_finalize(GObject *object) {
+  AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(object);
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   pango_font_description_free(priv->font_description);
   g_object_unref(priv->drag_gesture);
@@ -265,7 +265,7 @@ static void atom_text_editor_widget_finalize(GObject *gobject) {
   g_object_unref(priv->im_context);
   delete priv->select_next;
   delete priv->text_editor;
-  G_OBJECT_CLASS(atom_text_editor_widget_parent_class)->finalize(gobject);
+  G_OBJECT_CLASS(atom_text_editor_widget_parent_class)->finalize(object);
 }
 
 static void atom_text_editor_widget_set_property(GObject *object, guint property_id, const GValue *value, GParamSpec *pspec) {
