@@ -7,6 +7,8 @@
   bind "End" { "move-to-end-of-line"() };
   bind "<Control>Left" { "move-to-beginning-of-word"() };
   bind "<Control>Right" { "move-to-end-of-word"() };
+  bind "<Alt>Left" { "move-to-previous-subword-boundary"() };
+  bind "<Alt>Right" { "move-to-next-subword-boundary"() };
   bind "<Control>Home" { "move-to-top"() };
   bind "<Control>End" { "move-to-bottom"() };
   bind "<Shift>Up" { "select-up"() };
@@ -17,6 +19,8 @@
   bind "<Shift>End" { "select-to-end-of-line"() };
   bind "<Control><Shift>Left" { "select-to-beginning-of-word"() };
   bind "<Control><Shift>Right" { "select-to-end-of-word"() };
+  bind "<Alt><Shift>Left" { "select-to-previous-subword-boundary"() };
+  bind "<Alt><Shift>Right" { "select-to-next-subword-boundary"() };
   bind "<Control><Shift>Home" { "select-to-top"() };
   bind "<Control><Shift>End" { "select-to-bottom"() };
 

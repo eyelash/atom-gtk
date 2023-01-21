@@ -47,6 +47,8 @@ static void atom_text_editor_widget_move_to_first_character_of_line(AtomTextEdit
 static void atom_text_editor_widget_move_to_end_of_line(AtomTextEditorWidget *);
 static void atom_text_editor_widget_move_to_beginning_of_word(AtomTextEditorWidget *);
 static void atom_text_editor_widget_move_to_end_of_word(AtomTextEditorWidget *);
+static void atom_text_editor_widget_move_to_previous_subword_boundary(AtomTextEditorWidget *);
+static void atom_text_editor_widget_move_to_next_subword_boundary(AtomTextEditorWidget *);
 static void atom_text_editor_widget_move_to_top(AtomTextEditorWidget *);
 static void atom_text_editor_widget_move_to_bottom(AtomTextEditorWidget *);
 static void atom_text_editor_widget_select_all(AtomTextEditorWidget *);
@@ -58,6 +60,8 @@ static void atom_text_editor_widget_select_to_first_character_of_line(AtomTextEd
 static void atom_text_editor_widget_select_to_end_of_line(AtomTextEditorWidget *);
 static void atom_text_editor_widget_select_to_beginning_of_word(AtomTextEditorWidget *);
 static void atom_text_editor_widget_select_to_end_of_word(AtomTextEditorWidget *);
+static void atom_text_editor_widget_select_to_previous_subword_boundary(AtomTextEditorWidget *);
+static void atom_text_editor_widget_select_to_next_subword_boundary(AtomTextEditorWidget *);
 static void atom_text_editor_widget_select_to_top(AtomTextEditorWidget *);
 static void atom_text_editor_widget_select_to_bottom(AtomTextEditorWidget *);
 static void atom_text_editor_widget_select_line(AtomTextEditorWidget *);
@@ -109,6 +113,8 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   klass->move_to_end_of_line = atom_text_editor_widget_move_to_end_of_line;
   klass->move_to_beginning_of_word = atom_text_editor_widget_move_to_beginning_of_word;
   klass->move_to_end_of_word = atom_text_editor_widget_move_to_end_of_word;
+  klass->move_to_previous_subword_boundary = atom_text_editor_widget_move_to_previous_subword_boundary;
+  klass->move_to_next_subword_boundary = atom_text_editor_widget_move_to_next_subword_boundary;
   klass->move_to_top = atom_text_editor_widget_move_to_top;
   klass->move_to_bottom = atom_text_editor_widget_move_to_bottom;
   klass->select_all = atom_text_editor_widget_select_all;
@@ -120,6 +126,8 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   klass->select_to_end_of_line = atom_text_editor_widget_select_to_end_of_line;
   klass->select_to_beginning_of_word = atom_text_editor_widget_select_to_beginning_of_word;
   klass->select_to_end_of_word = atom_text_editor_widget_select_to_end_of_word;
+  klass->select_to_previous_subword_boundary = atom_text_editor_widget_select_to_previous_subword_boundary;
+  klass->select_to_next_subword_boundary = atom_text_editor_widget_select_to_next_subword_boundary;
   klass->select_to_top = atom_text_editor_widget_select_to_top;
   klass->select_to_bottom = atom_text_editor_widget_select_to_bottom;
   klass->select_line = atom_text_editor_widget_select_line;
@@ -148,6 +156,8 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   ADD_SIGNAL("move-to-end-of-line", move_to_end_of_line);
   ADD_SIGNAL("move-to-beginning-of-word", move_to_beginning_of_word);
   ADD_SIGNAL("move-to-end-of-word", move_to_end_of_word);
+  ADD_SIGNAL("move-to-previous-subword-boundary", move_to_previous_subword_boundary);
+  ADD_SIGNAL("move-to-next-subword-boundary", move_to_next_subword_boundary);
   ADD_SIGNAL("move-to-top", move_to_top);
   ADD_SIGNAL("move-to-bottom", move_to_bottom);
   ADD_SIGNAL("select-all", select_all);
@@ -159,6 +169,8 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   ADD_SIGNAL("select-to-end-of-line", select_to_end_of_line);
   ADD_SIGNAL("select-to-beginning-of-word", select_to_beginning_of_word);
   ADD_SIGNAL("select-to-end-of-word", select_to_end_of_word);
+  ADD_SIGNAL("select-to-previous-subword-boundary", select_to_previous_subword_boundary);
+  ADD_SIGNAL("select-to-next-subword-boundary", select_to_next_subword_boundary);
   ADD_SIGNAL("select-to-top", select_to_top);
   ADD_SIGNAL("select-to-bottom", select_to_bottom);
   ADD_SIGNAL("select-line", select_line);
@@ -789,6 +801,18 @@ static void atom_text_editor_widget_move_to_end_of_word(AtomTextEditorWidget *se
   gtk_widget_queue_draw(GTK_WIDGET(self));
 }
 
+static void atom_text_editor_widget_move_to_previous_subword_boundary(AtomTextEditorWidget *self) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  priv->text_editor->moveToPreviousSubwordBoundary();
+  gtk_widget_queue_draw(GTK_WIDGET(self));
+}
+
+static void atom_text_editor_widget_move_to_next_subword_boundary(AtomTextEditorWidget *self) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  priv->text_editor->moveToNextSubwordBoundary();
+  gtk_widget_queue_draw(GTK_WIDGET(self));
+}
+
 static void atom_text_editor_widget_move_to_top(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   priv->text_editor->moveToTop();
@@ -852,6 +876,18 @@ static void atom_text_editor_widget_select_to_beginning_of_word(AtomTextEditorWi
 static void atom_text_editor_widget_select_to_end_of_word(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   priv->text_editor->selectToEndOfWord();
+  gtk_widget_queue_draw(GTK_WIDGET(self));
+}
+
+static void atom_text_editor_widget_select_to_previous_subword_boundary(AtomTextEditorWidget *self) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  priv->text_editor->selectToPreviousSubwordBoundary();
+  gtk_widget_queue_draw(GTK_WIDGET(self));
+}
+
+static void atom_text_editor_widget_select_to_next_subword_boundary(AtomTextEditorWidget *self) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  priv->text_editor->selectToNextSubwordBoundary();
   gtk_widget_queue_draw(GTK_WIDGET(self));
 }
 

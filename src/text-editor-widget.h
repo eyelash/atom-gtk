@@ -17,6 +17,8 @@ struct _AtomTextEditorWidgetClass {
   void (*move_to_end_of_line)(AtomTextEditorWidget *);
   void (*move_to_beginning_of_word)(AtomTextEditorWidget *);
   void (*move_to_end_of_word)(AtomTextEditorWidget *);
+  void (*move_to_previous_subword_boundary)(AtomTextEditorWidget *);
+  void (*move_to_next_subword_boundary)(AtomTextEditorWidget *);
   void (*move_to_top)(AtomTextEditorWidget *);
   void (*move_to_bottom)(AtomTextEditorWidget *);
   void (*select_all)(AtomTextEditorWidget *);
@@ -28,6 +30,8 @@ struct _AtomTextEditorWidgetClass {
   void (*select_to_end_of_line)(AtomTextEditorWidget *);
   void (*select_to_beginning_of_word)(AtomTextEditorWidget *);
   void (*select_to_end_of_word)(AtomTextEditorWidget *);
+  void (*select_to_previous_subword_boundary)(AtomTextEditorWidget *);
+  void (*select_to_next_subword_boundary)(AtomTextEditorWidget *);
   void (*select_to_top)(AtomTextEditorWidget *);
   void (*select_to_bottom)(AtomTextEditorWidget *);
   void (*select_line)(AtomTextEditorWidget *);
