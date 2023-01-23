@@ -15,6 +15,10 @@ typedef struct {
   GtkDrawingArea parent_instance;
   TextEditor *text_editor;
   SelectNext *select_next;
+  GtkAdjustment *hadjustment;
+  GtkAdjustment *vadjustment;
+  GtkScrollablePolicy hscroll_policy;
+  GtkScrollablePolicy vscroll_policy;
   GtkIMContext *im_context;
   GtkGesture *multipress_gesture;
   GtkGesture *drag_gesture;
@@ -23,12 +27,27 @@ typedef struct {
   double line_height;
   double char_width;
 } AtomTextEditorWidgetPrivate;
-G_DEFINE_TYPE_WITH_PRIVATE(AtomTextEditorWidget, atom_text_editor_widget, GTK_TYPE_DRAWING_AREA)
+G_DEFINE_TYPE_WITH_CODE(AtomTextEditorWidget, atom_text_editor_widget, GTK_TYPE_DRAWING_AREA,
+  G_ADD_PRIVATE(AtomTextEditorWidget)
+  G_IMPLEMENT_INTERFACE(GTK_TYPE_SCROLLABLE, NULL)
+)
 
 #define GET_PRIVATE(x) (AtomTextEditorWidgetPrivate *)atom_text_editor_widget_get_instance_private(ATOM_TEXT_EDITOR_WIDGET(x))
 
+typedef enum {
+  PROP_0,
+  PROP_HADJUSTMENT,
+  PROP_VADJUSTMENT,
+  PROP_HSCROLL_POLICY,
+  PROP_VSCROLL_POLICY,
+  N_PROPERTIES
+} AtomTextEditorWidgetProperty;
+
 static void atom_text_editor_widget_dispose(GObject *);
 static void atom_text_editor_widget_finalize(GObject *);
+static void atom_text_editor_widget_set_property(GObject *, guint, const GValue *, GParamSpec *);
+static void atom_text_editor_widget_get_property(GObject *, guint, GValue *, GParamSpec *);
+static void atom_text_editor_widget_size_allocate(GtkWidget *, GtkAllocation *);
 static gboolean atom_text_editor_widget_draw(GtkWidget *, cairo_t *);
 static gboolean atom_text_editor_widget_key_press_event(GtkWidget *, GdkEventKey *);
 static gboolean atom_text_editor_widget_key_release_event(GtkWidget *, GdkEventKey *);
@@ -36,6 +55,7 @@ static void atom_text_editor_widget_commit(GtkIMContext *, gchar *, gpointer);
 static void atom_text_editor_widget_handle_pressed(GtkGestureMultiPress *, gint, gdouble, gdouble, gpointer);
 static void atom_text_editor_widget_handle_released(GtkGestureMultiPress *, gint, gdouble, gdouble, gpointer);
 static void atom_text_editor_widget_handle_drag_update(GtkGestureDrag *, gdouble, gdouble, gpointer);
+static void update(AtomTextEditorWidget *, bool = true);
 static void get_row_and_column(AtomTextEditorWidget *, double, double, int &, int &);
 static double index_to_x(int, PangoLayout *);
 static int x_to_index(double, PangoLayout *);
@@ -102,6 +122,9 @@ AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
 static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass) {
   G_OBJECT_CLASS(klass)->dispose = atom_text_editor_widget_dispose;
   G_OBJECT_CLASS(klass)->finalize = atom_text_editor_widget_finalize;
+  G_OBJECT_CLASS(klass)->set_property = atom_text_editor_widget_set_property;
+  G_OBJECT_CLASS(klass)->get_property = atom_text_editor_widget_get_property;
+  GTK_WIDGET_CLASS(klass)->size_allocate = atom_text_editor_widget_size_allocate;
   GTK_WIDGET_CLASS(klass)->draw = atom_text_editor_widget_draw;
   GTK_WIDGET_CLASS(klass)->key_press_event = atom_text_editor_widget_key_press_event;
   GTK_WIDGET_CLASS(klass)->key_release_event = atom_text_editor_widget_key_release_event;
@@ -191,11 +214,17 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   ADD_SIGNAL("duplicate-lines", duplicate_lines);
   ADD_SIGNAL("move-line-up", move_line_up);
   ADD_SIGNAL("move-line-down", move_line_down);
+  g_object_class_override_property(G_OBJECT_CLASS(klass), PROP_HADJUSTMENT, "hadjustment");
+  g_object_class_override_property(G_OBJECT_CLASS(klass), PROP_VADJUSTMENT, "vadjustment");
+  g_object_class_override_property(G_OBJECT_CLASS(klass), PROP_HSCROLL_POLICY, "hscroll-policy");
+  g_object_class_override_property(G_OBJECT_CLASS(klass), PROP_VSCROLL_POLICY, "vscroll-policy");
   gtk_widget_class_set_css_name(GTK_WIDGET_CLASS(klass), "atom-text-editor-widget");
 }
 
 static void atom_text_editor_widget_init(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  priv->hadjustment = NULL;
+  priv->vadjustment = NULL;
   priv->im_context = gtk_im_multicontext_new();
   g_signal_connect_object(priv->im_context, "commit", G_CALLBACK(atom_text_editor_widget_commit), self, G_CONNECT_DEFAULT);
   priv->multipress_gesture = gtk_gesture_multi_press_new(GTK_WIDGET(self));
@@ -220,6 +249,7 @@ static void atom_text_editor_widget_init(AtomTextEditorWidget *self) {
   priv->char_width = pango_units_to_double(pango_font_metrics_get_approximate_char_width(metrics));
   pango_font_metrics_unref(metrics);
   gtk_widget_set_can_focus(GTK_WIDGET(self), TRUE);
+  gtk_widget_add_events(GTK_WIDGET(self), GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK);
 }
 
 static void atom_text_editor_widget_dispose(GObject *gobject) {
@@ -236,6 +266,55 @@ static void atom_text_editor_widget_finalize(GObject *gobject) {
   delete priv->select_next;
   delete priv->text_editor;
   G_OBJECT_CLASS(atom_text_editor_widget_parent_class)->finalize(gobject);
+}
+
+static void atom_text_editor_widget_set_property(GObject *object, guint property_id, const GValue *value, GParamSpec *pspec) {
+  AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(object);
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  switch (property_id) {
+  case PROP_HADJUSTMENT:
+    priv->hadjustment = GTK_ADJUSTMENT(g_value_get_object(value));
+    break;
+  case PROP_VADJUSTMENT:
+    priv->vadjustment = GTK_ADJUSTMENT(g_value_get_object(value));
+    update(self, false);
+    break;
+  case PROP_HSCROLL_POLICY:
+    priv->hscroll_policy = (GtkScrollablePolicy)g_value_get_enum(value);
+    break;
+  case PROP_VSCROLL_POLICY:
+    priv->vscroll_policy = (GtkScrollablePolicy)g_value_get_enum(value);
+    break;
+  default:
+    break;
+  }
+}
+
+static void atom_text_editor_widget_get_property(GObject *object, guint property_id, GValue *value, GParamSpec *pspec) {
+  AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(object);
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  switch (property_id) {
+  case PROP_HADJUSTMENT:
+    g_value_set_object(value, priv->hadjustment);
+    break;
+  case PROP_VADJUSTMENT:
+    g_value_set_object(value, priv->vadjustment);
+    break;
+  case PROP_HSCROLL_POLICY:
+    g_value_set_enum(value, priv->hscroll_policy);
+    break;
+  case PROP_VSCROLL_POLICY:
+    g_value_set_enum(value, priv->vscroll_policy);
+    break;
+  default:
+    break;
+  }
+}
+
+static void atom_text_editor_widget_size_allocate(GtkWidget *widget, GtkAllocation *allocation) {
+  AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(widget);
+  GTK_WIDGET_CLASS(atom_text_editor_widget_parent_class)->size_allocate(widget, allocation);
+  update(self, false);
 }
 
 gboolean atom_text_editor_widget_save(AtomTextEditorWidget *self) {
@@ -369,6 +448,7 @@ static PangoLayout *get_screen_line(AtomTextEditorWidget *self, double row) {
 }
 
 static Range constrain_range_to_rows(Range range, double start_row, double end_row) {
+  if (range.end.row < start_row || range.start.row >= end_row) return Range();
   if (range.start.row < start_row || range.end.row >= end_row) {
     if (range.start.row < start_row) {
       range.start.row = start_row;
@@ -592,8 +672,12 @@ static gboolean atom_text_editor_widget_draw(GtkWidget *widget, cairo_t *cr) {
   AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(widget);
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
 
-  double start_row = 0;
-  double end_row = priv->text_editor->getScreenLineCount();
+  const double allocated_width = gtk_widget_get_allocated_width(widget);
+  const double allocated_height = gtk_widget_get_allocated_height(widget);
+  const double vadjustment = gtk_adjustment_get_value(priv->vadjustment);
+
+  const double start_row = std::min(std::floor(vadjustment / priv->line_height), priv->text_editor->getScreenLineCount());
+  const double end_row = std::min(std::ceil((allocated_height + vadjustment) / priv->line_height), priv->text_editor->getScreenLineCount());
   auto screen_lines = priv->text_editor->displayLayer->getScreenLines(start_row, end_row);
   auto decorations = priv->text_editor->decorationManager->decorationPropertiesByMarkerForScreenRowRange(start_row, end_row);
 
@@ -610,19 +694,17 @@ static gboolean atom_text_editor_widget_draw(GtkWidget *widget, cairo_t *cr) {
     layouts.push_back(get_screen_line(self, screen_lines[i]));
   }
 
-  const double allocated_width = gtk_widget_get_allocated_width(widget);
-  const double allocated_height = gtk_widget_get_allocated_height(widget);
   const double padding = round(priv->char_width);
   const double gutter_width = padding * 4 + round(count_digits(priv->text_editor->getScreenLineCount()) * priv->char_width);
 
   gtk_render_background(gtk_widget_get_style_context(widget), cr, 0, 0, allocated_width, allocated_height);
 
   cairo_save(cr);
-  cairo_translate(cr, 0, padding);
+  cairo_translate(cr, 0, -vadjustment);
   draw_gutter(widget, cr, padding, gutter_width, start_row, end_row, gutter_classes);
   cairo_restore(cr);
   cairo_save(cr);
-  cairo_translate(cr, gutter_width, padding);
+  cairo_translate(cr, gutter_width, -vadjustment);
   draw_lines(widget, cr, allocated_width - gutter_width, start_row, end_row, line_classes, highlights, cursors, layouts);
   cairo_restore(cr);
 
@@ -654,7 +736,7 @@ static void atom_text_editor_widget_commit(GtkIMContext *im_context, gchar *text
   gunichar2 *utf16 = g_utf8_to_utf16(text, -1, NULL, NULL, NULL);
   priv->text_editor->insertText((const char16_t *)utf16);
   g_free(utf16);
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  update(self);
 }
 
 static void atom_text_editor_widget_handle_pressed(GtkGestureMultiPress *multipress_gesture, gint n_press, gdouble x, gdouble y, gpointer user_data) {
@@ -720,11 +802,29 @@ static void atom_text_editor_widget_handle_drag_update(GtkGestureDrag *drag_gest
   gtk_widget_queue_draw(GTK_WIDGET(self));
 }
 
+static void update(AtomTextEditorWidget *self, bool redraw) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  if (priv->vadjustment) {
+    const double page_size = gtk_widget_get_allocated_height(GTK_WIDGET(self));
+    const double upper = std::max(priv->text_editor->getScreenLineCount() * priv->line_height, page_size);
+    const double max_value = std::max(upper - page_size, 0.0);
+    g_object_freeze_notify(G_OBJECT(priv->vadjustment));
+    gtk_adjustment_set_page_size(priv->vadjustment, page_size);
+    gtk_adjustment_set_upper(priv->vadjustment, upper);
+    if (gtk_adjustment_get_value(priv->vadjustment) > max_value) {
+      gtk_adjustment_set_value(priv->vadjustment, max_value);
+    }
+    g_object_thaw_notify(G_OBJECT(priv->vadjustment));
+  }
+  if (redraw) gtk_widget_queue_draw(GTK_WIDGET(self));
+}
+
 static void get_row_and_column(AtomTextEditorWidget *self, double x, double y, int &row, int &column) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  const double vadjustment = gtk_adjustment_get_value(priv->vadjustment);
   const double padding = round(priv->char_width);
   const double gutter_width = padding * 4 + round(count_digits(priv->text_editor->getScreenLineCount()) * priv->char_width);
-  row = MAX((y - padding) / priv->line_height, 0.0);
+  row = MAX((y + vadjustment) / priv->line_height, 0.0);
   if (row < priv->text_editor->getScreenLineCount()) {
     PangoLayout *layout = get_screen_line(self, row);
     column = x_to_index(x - gutter_width, layout);
@@ -936,77 +1036,77 @@ static void atom_text_editor_widget_select_next(AtomTextEditorWidget *self) {
 static void atom_text_editor_widget_insert_newline(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   priv->text_editor->insertNewline();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  update(self);
 }
 
 static void atom_text_editor_widget_insert_newline_above(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   priv->text_editor->insertNewlineAbove();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  update(self);
 }
 
 static void atom_text_editor_widget_insert_newline_below(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   priv->text_editor->insertNewlineBelow();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  update(self);
 }
 
 static void atom_text_editor_widget_backspace(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   priv->text_editor->backspace();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  update(self);
 }
 
 static void atom_text_editor_widget_delete(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   priv->text_editor->delete_();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  update(self);
 }
 
 static void atom_text_editor_widget_delete_to_beginning_of_word(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   priv->text_editor->deleteToBeginningOfWord();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  update(self);
 }
 
 static void atom_text_editor_widget_delete_to_end_of_word(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   priv->text_editor->deleteToEndOfWord();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  update(self);
 }
 
 static void atom_text_editor_widget_indent(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   priv->text_editor->indent();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  update(self);
 }
 
 static void atom_text_editor_widget_outdent_selected_rows(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   priv->text_editor->outdentSelectedRows();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  update(self);
 }
 
 static void atom_text_editor_widget_delete_line(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   priv->text_editor->deleteLine();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  update(self);
 }
 
 static void atom_text_editor_widget_duplicate_lines(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   priv->text_editor->duplicateLines();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  update(self);
 }
 
 static void atom_text_editor_widget_move_line_up(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   priv->text_editor->moveLineUp();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  update(self);
 }
 
 static void atom_text_editor_widget_move_line_down(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   priv->text_editor->moveLineDown();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  update(self);
 }
