@@ -21,7 +21,7 @@ executable(
     'src'
   ),
   dependencies: [
-    subproject('atom-native').get_variable('atom_dependency'),
+    subproject('atom-native').get_variable('atom_dep'),
     dependency('gtk+-3.0'),
   ],
 )

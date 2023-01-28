@@ -2,7 +2,7 @@
 
 - [x] multiple selections
 - [x] select next
-- [ ] syntax highlighting
+- [x] syntax highlighting
 - [ ] copy/paste
 - [ ] undo/redo
 - [ ] find/replace

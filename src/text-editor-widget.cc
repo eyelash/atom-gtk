@@ -1,9 +1,15 @@
 #include "text-editor-widget.h"
+#include <grammar-registry.h>
 #include <text-editor.h>
 #include <display-marker.h>
 #include <decoration-manager.h>
 #include <selection.h>
 #include <select-next.h>
+
+extern "C" TreeSitterGrammar *atom_language_c();
+extern "C" TreeSitterGrammar *atom_language_cpp();
+extern "C" TreeSitterGrammar *atom_language_javascript();
+extern "C" TreeSitterGrammar *atom_language_python();
 
 #if !GLIB_CHECK_VERSION(2, 73, 2)
 #define G_CONNECT_DEFAULT ((GConnectFlags)0)
@@ -106,13 +112,24 @@ static void atom_text_editor_widget_move_line_down(AtomTextEditorWidget *);
 AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
   AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(g_object_new(ATOM_TYPE_TEXT_EDITOR_WIDGET, NULL));
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  TextBuffer *buffer;
   if (file) {
     gchar *path = g_file_get_path(file);
-    priv->text_editor = new TextEditor(TextBuffer::loadSync(path));
+    buffer = TextBuffer::loadSync(path);
     g_free(path);
   } else {
-    priv->text_editor = new TextEditor();
+    buffer = new TextBuffer();
   }
+  static GrammarRegistry *grammar_registry = nullptr;
+  if (grammar_registry == nullptr) {
+    grammar_registry = new GrammarRegistry();
+    grammar_registry->addGrammar(atom_language_c());
+    grammar_registry->addGrammar(atom_language_cpp());
+    grammar_registry->addGrammar(atom_language_javascript());
+    grammar_registry->addGrammar(atom_language_python());
+  }
+  grammar_registry->autoAssignLanguageMode(buffer);
+  priv->text_editor = new TextEditor(buffer);
   priv->select_next = new SelectNext(priv->text_editor);
   return self;
 }
@@ -385,30 +402,32 @@ static void get_style_property_for_path(GtkWidget *widget, const std::vector<std
 static void emit_attributes(GtkWidget *widget, gchar *utf8, PangoAttrList *attrs, int32_t index, int32_t &last_index, const std::vector<std::string> &classes) {
   if (index == last_index) return;
 
-  PangoStyle font_style;
-  get_style_property_for_path(widget, classes, "font-style", &font_style);
-  PangoAttribute *attr = pango_attr_style_new(font_style);
-  attr->start_index = g_utf8_offset_to_pointer(utf8, last_index) - utf8;
-  attr->end_index = g_utf8_offset_to_pointer(utf8, index) - utf8;
-  pango_attr_list_insert(attrs, attr);
+  if (classes.size() > 1) {
+    PangoStyle font_style;
+    get_style_property_for_path(widget, classes, "font-style", &font_style);
+    PangoAttribute *attr = pango_attr_style_new(font_style);
+    attr->start_index = g_utf8_offset_to_pointer(utf8, last_index) - utf8;
+    attr->end_index = g_utf8_offset_to_pointer(utf8, index) - utf8;
+    pango_attr_list_insert(attrs, attr);
 
-  PangoWeight font_weight;
-  get_style_property_for_path(widget, classes, "font-weight", &font_weight);
-  attr = pango_attr_weight_new(font_weight);
-  attr->start_index = g_utf8_offset_to_pointer(utf8, last_index) - utf8;
-  attr->end_index = g_utf8_offset_to_pointer(utf8, index) - utf8;
-  pango_attr_list_insert(attrs, attr);
+    PangoWeight font_weight;
+    get_style_property_for_path(widget, classes, "font-weight", &font_weight);
+    attr = pango_attr_weight_new(font_weight);
+    attr->start_index = g_utf8_offset_to_pointer(utf8, last_index) - utf8;
+    attr->end_index = g_utf8_offset_to_pointer(utf8, index) - utf8;
+    pango_attr_list_insert(attrs, attr);
 
-  GdkRGBA text_color;
-  get_style_property_for_path(widget, classes, "color", &text_color);
-  attr = pango_attr_foreground_new(text_color.red * G_MAXUINT16, text_color.green * G_MAXUINT16, text_color.blue * G_MAXUINT16);
-  attr->start_index = g_utf8_offset_to_pointer(utf8, last_index) - utf8;
-  attr->end_index = g_utf8_offset_to_pointer(utf8, index) - utf8;
-  pango_attr_list_insert(attrs, attr);
-  attr = pango_attr_foreground_alpha_new(text_color.alpha * G_MAXUINT16);
-  attr->start_index = g_utf8_offset_to_pointer(utf8, last_index) - utf8;
-  attr->end_index = g_utf8_offset_to_pointer(utf8, index) - utf8;
-  pango_attr_list_insert(attrs, attr);
+    GdkRGBA text_color;
+    get_style_property_for_path(widget, classes, "color", &text_color);
+    attr = pango_attr_foreground_new(text_color.red * G_MAXUINT16, text_color.green * G_MAXUINT16, text_color.blue * G_MAXUINT16);
+    attr->start_index = g_utf8_offset_to_pointer(utf8, last_index) - utf8;
+    attr->end_index = g_utf8_offset_to_pointer(utf8, index) - utf8;
+    pango_attr_list_insert(attrs, attr);
+    attr = pango_attr_foreground_alpha_new(text_color.alpha * G_MAXUINT16);
+    attr->start_index = g_utf8_offset_to_pointer(utf8, last_index) - utf8;
+    attr->end_index = g_utf8_offset_to_pointer(utf8, index) - utf8;
+    pango_attr_list_insert(attrs, attr);
+  }
 
   last_index = index;
 }
