@@ -779,8 +779,8 @@ static void atom_text_editor_widget_handle_pressed(GtkGestureMultiPress *multipr
     if (extend_selection) {
       Selection *last_selection = priv->text_editor->getLastSelection();
       initial_buffer_range = last_selection->getBufferRange();
-      last_selection->setBufferRange(initial_buffer_range.union_(clicked_line_buffer_range));
-      // TODO: set reversed
+      const bool reversed = row < last_selection->getScreenRange().start.row;
+      last_selection->setBufferRange(initial_buffer_range.union_(clicked_line_buffer_range), reversed);
     } else {
       initial_buffer_range = clicked_line_buffer_range;
       if (modify_selection) {
@@ -846,8 +846,8 @@ static void atom_text_editor_widget_handle_drag_update(GtkGestureDrag *drag_gest
   if (start_x < gutter_width) {
     const double row = MAX((start_y + offset_y + vadjustment) / priv->line_height, 0.0);
     const Range dragged_line_screen_range(Point(row, 0), Point(row + 1, 0));
-    // TODO: set reversed
-    priv->text_editor->getLastSelection()->setScreenRange(dragged_line_screen_range.union_(priv->initial_screen_range));
+    const bool reversed = row < priv->initial_screen_range.start.row;
+    priv->text_editor->getLastSelection()->setScreenRange(dragged_line_screen_range.union_(priv->initial_screen_range), reversed);
   } else {
     int row, column;
     get_row_and_column(self, start_x + offset_x, start_y + offset_y, row, column);
