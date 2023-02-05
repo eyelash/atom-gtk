@@ -1,4 +1,5 @@
 #include "text-editor-widget.h"
+#include "layout-cache.h"
 #include <grammar-registry.h>
 #include <text-editor.h>
 #include <display-marker.h>
@@ -17,44 +18,13 @@ extern "C" TreeSitterGrammar *atom_language_python();
 
 #define LINE_HEIGHT_FACTOR 1.5
 
-typedef struct {
-  GtkDrawingArea parent_instance;
-  TextEditor *text_editor;
-  SelectNext *select_next;
-  GtkAdjustment *hadjustment;
-  GtkAdjustment *vadjustment;
-  GtkScrollablePolicy hscroll_policy;
-  GtkScrollablePolicy vscroll_policy;
-  GtkIMContext *im_context;
-  GtkGesture *multipress_gesture;
-  GtkGesture *drag_gesture;
-  PangoFontDescription *font_description;
-  double ascent;
-  double line_height;
-  double char_width;
-  Range initial_screen_range;
-} AtomTextEditorWidgetPrivate;
-G_DEFINE_TYPE_WITH_CODE(AtomTextEditorWidget, atom_text_editor_widget, GTK_TYPE_DRAWING_AREA,
-  G_ADD_PRIVATE(AtomTextEditorWidget)
-  G_IMPLEMENT_INTERFACE(GTK_TYPE_SCROLLABLE, NULL)
-)
-
-#define GET_PRIVATE(x) (AtomTextEditorWidgetPrivate *)atom_text_editor_widget_get_instance_private(ATOM_TEXT_EDITOR_WIDGET(x))
-
-typedef enum {
-  PROP_0,
-  PROP_HADJUSTMENT,
-  PROP_VADJUSTMENT,
-  PROP_HSCROLL_POLICY,
-  PROP_VSCROLL_POLICY,
-  N_PROPERTIES
-} AtomTextEditorWidgetProperty;
-
 static void atom_text_editor_widget_dispose(GObject *);
 static void atom_text_editor_widget_finalize(GObject *);
 static void atom_text_editor_widget_set_property(GObject *, guint, const GValue *, GParamSpec *);
 static void atom_text_editor_widget_get_property(GObject *, guint, GValue *, GParamSpec *);
 static void atom_text_editor_widget_size_allocate(GtkWidget *, GtkAllocation *);
+static PangoLayout *create_layout(AtomTextEditorWidget *, const DisplayLayer::ScreenLine &);
+static void free_layout(PangoLayout *);
 static gboolean atom_text_editor_widget_draw(GtkWidget *, cairo_t *);
 static gboolean atom_text_editor_widget_key_press_event(GtkWidget *, GdkEventKey *);
 static gboolean atom_text_editor_widget_key_release_event(GtkWidget *, GdkEventKey *);
@@ -109,6 +79,40 @@ static void atom_text_editor_widget_delete_line(AtomTextEditorWidget *);
 static void atom_text_editor_widget_duplicate_lines(AtomTextEditorWidget *);
 static void atom_text_editor_widget_move_line_up(AtomTextEditorWidget *);
 static void atom_text_editor_widget_move_line_down(AtomTextEditorWidget *);
+
+typedef struct {
+  GtkDrawingArea parent_instance;
+  TextEditor *text_editor;
+  SelectNext *select_next;
+  GtkAdjustment *hadjustment;
+  GtkAdjustment *vadjustment;
+  GtkScrollablePolicy hscroll_policy;
+  GtkScrollablePolicy vscroll_policy;
+  GtkIMContext *im_context;
+  GtkGesture *multipress_gesture;
+  GtkGesture *drag_gesture;
+  PangoFontDescription *font_description;
+  double ascent;
+  double line_height;
+  double char_width;
+  LayoutCache<AtomTextEditorWidget, PangoLayout *, &create_layout, &free_layout> *layout_cache;
+  Range initial_screen_range;
+} AtomTextEditorWidgetPrivate;
+G_DEFINE_TYPE_WITH_CODE(AtomTextEditorWidget, atom_text_editor_widget, GTK_TYPE_DRAWING_AREA,
+  G_ADD_PRIVATE(AtomTextEditorWidget)
+  G_IMPLEMENT_INTERFACE(GTK_TYPE_SCROLLABLE, NULL)
+)
+
+#define GET_PRIVATE(x) (AtomTextEditorWidgetPrivate *)atom_text_editor_widget_get_instance_private(ATOM_TEXT_EDITOR_WIDGET(x))
+
+typedef enum {
+  PROP_0,
+  PROP_HADJUSTMENT,
+  PROP_VADJUSTMENT,
+  PROP_HSCROLL_POLICY,
+  PROP_VSCROLL_POLICY,
+  N_PROPERTIES
+} AtomTextEditorWidgetProperty;
 
 AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
   AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(g_object_new(ATOM_TYPE_TEXT_EDITOR_WIDGET, NULL));
@@ -266,6 +270,7 @@ static void atom_text_editor_widget_init(AtomTextEditorWidget *self) {
   priv->ascent = round(ascent + (priv->line_height - (ascent + descent)) / 2.0);
   priv->char_width = pango_units_to_double(pango_font_metrics_get_approximate_char_width(metrics));
   pango_font_metrics_unref(metrics);
+  priv->layout_cache = new LayoutCache<AtomTextEditorWidget, PangoLayout *, &create_layout, &free_layout>();
   gtk_widget_set_can_focus(GTK_WIDGET(self), TRUE);
   gtk_widget_add_events(GTK_WIDGET(self), GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK);
 }
@@ -277,6 +282,7 @@ static void atom_text_editor_widget_dispose(GObject *object) {
 static void atom_text_editor_widget_finalize(GObject *object) {
   AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(object);
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  delete priv->layout_cache;
   pango_font_description_free(priv->font_description);
   g_object_unref(priv->drag_gesture);
   g_object_unref(priv->multipress_gesture);
@@ -433,7 +439,7 @@ static void emit_attributes(GtkWidget *widget, gchar *utf8, PangoAttrList *attrs
   last_index = index;
 }
 
-static PangoLayout *get_screen_line(AtomTextEditorWidget *self, const DisplayLayer::ScreenLine &screen_line) {
+static PangoLayout *create_layout(AtomTextEditorWidget *self, const DisplayLayer::ScreenLine &screen_line) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   PangoLayout *layout = pango_layout_new(gtk_widget_get_pango_context(GTK_WIDGET(self)));
   pango_layout_set_font_description(layout, priv->font_description);
@@ -462,9 +468,8 @@ static PangoLayout *get_screen_line(AtomTextEditorWidget *self, const DisplayLay
   return layout;
 }
 
-static PangoLayout *get_screen_line(AtomTextEditorWidget *self, double row) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  return get_screen_line(self, priv->text_editor->displayLayer->getScreenLine(row));
+static void free_layout(PangoLayout *layout) {
+  g_object_unref(layout);
 }
 
 static Range constrain_range_to_rows(Range range, double start_row, double end_row) {
@@ -709,10 +714,7 @@ static gboolean atom_text_editor_widget_draw(GtkWidget *widget, cairo_t *cr) {
     parse_decoration(start_row, end_row, decoration, line_classes, gutter_classes, highlights, cursors);
   }
 
-  std::vector<PangoLayout *> layouts;
-  for (size_t i = 0; i < screen_lines.size(); i++) {
-    layouts.push_back(get_screen_line(self, screen_lines[i]));
-  }
+  std::vector<PangoLayout *> layouts = priv->layout_cache->get_layouts(self, screen_lines);
 
   const double padding = round(priv->char_width);
   const double gutter_width = padding * 4 + round(count_digits(priv->text_editor->getScreenLineCount()) * priv->char_width);
@@ -728,9 +730,6 @@ static gboolean atom_text_editor_widget_draw(GtkWidget *widget, cairo_t *cr) {
   draw_lines(widget, cr, allocated_width - gutter_width, start_row, end_row, line_classes, highlights, cursors, layouts);
   cairo_restore(cr);
 
-  for (size_t i = 0; i < layouts.size(); i++) {
-    g_object_unref(layouts[i]);
-  }
   return GDK_EVENT_STOP;
 }
 
@@ -881,9 +880,8 @@ static void get_row_and_column(AtomTextEditorWidget *self, double x, double y, i
   const double gutter_width = padding * 4 + round(count_digits(priv->text_editor->getScreenLineCount()) * priv->char_width);
   row = MAX((y + vadjustment) / priv->line_height, 0.0);
   if (row < priv->text_editor->getScreenLineCount()) {
-    PangoLayout *layout = get_screen_line(self, row);
+    PangoLayout *layout = priv->layout_cache->get_layout(self, priv->text_editor->displayLayer->getScreenLine(row));
     column = x_to_index(x - gutter_width, layout);
-    g_object_unref(layout);
   } else {
     column = 0;
   }
