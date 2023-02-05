@@ -32,6 +32,7 @@ typedef struct {
   double ascent;
   double line_height;
   double char_width;
+  Range initial_screen_range;
 } AtomTextEditorWidgetPrivate;
 G_DEFINE_TYPE_WITH_CODE(AtomTextEditorWidget, atom_text_editor_widget, GTK_TYPE_DRAWING_AREA,
   G_ADD_PRIVATE(AtomTextEditorWidget)
@@ -761,43 +762,68 @@ static void atom_text_editor_widget_commit(GtkIMContext *im_context, gchar *text
 static void atom_text_editor_widget_handle_pressed(GtkGestureMultiPress *multipress_gesture, gint n_press, gdouble x, gdouble y, gpointer user_data) {
   AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(user_data);
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  const double vadjustment = gtk_adjustment_get_value(priv->vadjustment);
+  const double padding = round(priv->char_width);
+  const double gutter_width = padding * 4 + round(count_digits(priv->text_editor->getScreenLineCount()) * priv->char_width);
   GdkEventSequence *sequence = gtk_gesture_single_get_current_sequence(GTK_GESTURE_SINGLE(multipress_gesture));
   const GdkEvent *event = gtk_gesture_get_last_event(GTK_GESTURE(multipress_gesture), sequence);
   GdkModifierType state;
   gdk_event_get_state(event, &state);
-  bool modify_selection = state & gtk_widget_get_modifier_mask(GTK_WIDGET(self), GDK_MODIFIER_INTENT_MODIFY_SELECTION);
-  bool extend_selection = state & gtk_widget_get_modifier_mask(GTK_WIDGET(self), GDK_MODIFIER_INTENT_EXTEND_SELECTION);
-  int row, column;
-  get_row_and_column(self, x, y, row, column);
-  switch (n_press) {
-  case 1:
-    if (modify_selection) {
-      Selection *selection = priv->text_editor->getSelectionAtScreenPosition(Point(row, column));
-      if (selection) {
-        if (priv->text_editor->hasMultipleCursors()) selection->destroy();
+  const bool modify_selection = state & gtk_widget_get_modifier_mask(GTK_WIDGET(self), GDK_MODIFIER_INTENT_MODIFY_SELECTION);
+  const bool extend_selection = state & gtk_widget_get_modifier_mask(GTK_WIDGET(self), GDK_MODIFIER_INTENT_EXTEND_SELECTION);
+  if (x < gutter_width) {
+    const double row = MAX((y + vadjustment) / priv->line_height, 0.0);
+    const double start_buffer_row = priv->text_editor->bufferPositionForScreenPosition({row, 0}).row;
+    const double end_buffer_row = priv->text_editor->bufferPositionForScreenPosition({row, INFINITY}).row;
+    const Range clicked_line_buffer_range(Point(start_buffer_row, 0), Point(end_buffer_row + 1, 0));
+    Range initial_buffer_range;
+    if (extend_selection) {
+      Selection *last_selection = priv->text_editor->getLastSelection();
+      initial_buffer_range = last_selection->getBufferRange();
+      last_selection->setBufferRange(initial_buffer_range.union_(clicked_line_buffer_range));
+      // TODO: set reversed
+    } else {
+      initial_buffer_range = clicked_line_buffer_range;
+      if (modify_selection) {
+        priv->text_editor->addSelectionForBufferRange(clicked_line_buffer_range);
       } else {
+        priv->text_editor->setSelectedBufferRange(clicked_line_buffer_range);
+      }
+    }
+    priv->initial_screen_range = priv->text_editor->screenRangeForBufferRange(initial_buffer_range);
+  } else {
+    int row, column;
+    get_row_and_column(self, x, y, row, column);
+    switch (n_press) {
+    case 1:
+      if (modify_selection) {
+        Selection *selection = priv->text_editor->getSelectionAtScreenPosition(Point(row, column));
+        if (selection) {
+          if (priv->text_editor->hasMultipleCursors()) selection->destroy();
+        } else {
+          priv->text_editor->addCursorAtScreenPosition(Point(row, column));
+        }
+      } else {
+        if (extend_selection) {
+          priv->text_editor->selectToScreenPosition(Point(row, column));
+        } else {
+          priv->text_editor->setCursorScreenPosition(Point(row, column));
+        }
+      }
+      break;
+    case 2:
+      if (modify_selection) {
         priv->text_editor->addCursorAtScreenPosition(Point(row, column));
       }
-    } else {
-      if (extend_selection) {
-        priv->text_editor->selectToScreenPosition(Point(row, column));
-      } else {
-        priv->text_editor->setCursorScreenPosition(Point(row, column));
+      priv->text_editor->getLastSelection()->selectWord();
+      break;
+    case 3:
+      if (modify_selection) {
+        priv->text_editor->addCursorAtScreenPosition(Point(row, column));
       }
+      priv->text_editor->getLastSelection()->selectLine();
+      break;
     }
-    break;
-  case 2:
-    if (modify_selection) {
-      priv->text_editor->addCursorAtScreenPosition(Point(row, column));
-    }
-    priv->text_editor->getLastSelection()->selectWord();
-    break;
-  case 3:
-    if (modify_selection) {
-      priv->text_editor->addCursorAtScreenPosition(Point(row, column));
-    }
-    priv->text_editor->getLastSelection()->selectLine();
-    break;
   }
   gtk_widget_queue_draw(GTK_WIDGET(self));
 }
@@ -813,11 +839,21 @@ static void atom_text_editor_widget_handle_released(GtkGestureMultiPress *multip
 static void atom_text_editor_widget_handle_drag_update(GtkGestureDrag *drag_gesture, gdouble offset_x, gdouble offset_y, gpointer user_data) {
   AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(user_data);
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  const double vadjustment = gtk_adjustment_get_value(priv->vadjustment);
+  const double padding = round(priv->char_width);
+  const double gutter_width = padding * 4 + round(count_digits(priv->text_editor->getScreenLineCount()) * priv->char_width);
   double start_x, start_y;
   gtk_gesture_drag_get_start_point(drag_gesture, &start_x, &start_y);
-  int row, column;
-  get_row_and_column(self, start_x + offset_x, start_y + offset_y, row, column);
-  priv->text_editor->selectToScreenPosition(Point(row, column), true);
+  if (start_x < gutter_width) {
+    const double row = MAX((start_y + offset_y + vadjustment) / priv->line_height, 0.0);
+    const Range dragged_line_screen_range(Point(row, 0), Point(row + 1, 0));
+    // TODO: set reversed
+    priv->text_editor->getLastSelection()->setScreenRange(dragged_line_screen_range.union_(priv->initial_screen_range));
+  } else {
+    int row, column;
+    get_row_and_column(self, start_x + offset_x, start_y + offset_y, row, column);
+    priv->text_editor->selectToScreenPosition(Point(row, column), true);
+  }
   gtk_widget_queue_draw(GTK_WIDGET(self));
 }
 
