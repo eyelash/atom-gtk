@@ -505,7 +505,10 @@ void atom_text_editor_widget_save_as(AtomTextEditorWidget *self, GFile *file) {
 
 static void get_style_property_for_path(GtkWidget *widget, const std::vector<std::string> &path, const gchar *property, GValue *value) {
   GtkStyleContext *style_context = gtk_style_context_new();
-  GtkWidgetPath *widget_path = gtk_widget_path_copy(gtk_style_context_get_path(gtk_widget_get_style_context(widget)));
+  GtkWidgetPath *widget_path = gtk_widget_path_new();
+  gint iter0 = gtk_widget_path_append_type(widget_path, ATOM_TYPE_TEXT_EDITOR_WIDGET);
+  gtk_widget_path_iter_set_object_name(widget_path, iter0, "atom-text-editor");
+  gtk_style_context_set_path(style_context, widget_path);
   for (const std::string &classes : path) {
     gint iter = gtk_widget_path_append_type(widget_path, G_TYPE_NONE);
     gtk_widget_path_iter_set_object_name(widget_path, iter, "div");
@@ -517,8 +520,12 @@ static void get_style_property_for_path(GtkWidget *widget, const std::vector<std
       match = classes.find(' ', pos);
     }
     gtk_widget_path_iter_add_class(widget_path, iter, classes.substr(pos).c_str());
+    GtkStyleContext *new_style_context = gtk_style_context_new();
+    gtk_style_context_set_path(new_style_context, widget_path);
+    gtk_style_context_set_parent(new_style_context, style_context);
+    g_object_unref(style_context);
+    style_context = new_style_context;
   }
-  gtk_style_context_set_path(style_context, widget_path);
   gtk_style_context_get_property(style_context, property, GTK_STATE_FLAG_NORMAL, value);
   gtk_widget_path_free(widget_path);
   g_object_unref(style_context);
