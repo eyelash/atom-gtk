@@ -22,6 +22,8 @@ static void atom_text_editor_widget_dispose(GObject *);
 static void atom_text_editor_widget_finalize(GObject *);
 static void atom_text_editor_widget_set_property(GObject *, guint, const GValue *, GParamSpec *);
 static void atom_text_editor_widget_get_property(GObject *, guint, GValue *, GParamSpec *);
+static void atom_text_editor_widget_realize(GtkWidget *);
+static void atom_text_editor_widget_unrealize(GtkWidget *);
 static void atom_text_editor_widget_size_allocate(GtkWidget *, GtkAllocation *);
 static void get_style_property_for_path(GtkWidget *, const std::vector<std::string> &, const gchar *, GValue *);
 static PangoLayout *create_layout(AtomTextEditorWidget *, const DisplayLayer::ScreenLine &);
@@ -223,14 +225,24 @@ public:
   }
 };
 
+static int count_digits(int n) {
+  int digits = 1;
+  while (n >= 10) {
+    digits++;
+    n /= 10;
+  }
+  return digits;
+}
+
 typedef struct {
-  GtkDrawingArea parent_instance;
+  GtkWidget parent_instance;
   TextEditor *text_editor;
   SelectNext *select_next;
   GtkAdjustment *hadjustment;
   GtkAdjustment *vadjustment;
   GtkScrollablePolicy hscroll_policy;
   GtkScrollablePolicy vscroll_policy;
+  GdkWindow *text_window;
   GtkIMContext *im_context;
   GtkGesture *multipress_gesture;
   GtkGesture *drag_gesture;
@@ -240,9 +252,10 @@ typedef struct {
   double char_width;
   LayoutCache<AtomTextEditorWidget, Layout> *layout_cache;
   StyleCache *style_cache;
+  double gutter_width;
   Range initial_screen_range;
 } AtomTextEditorWidgetPrivate;
-G_DEFINE_TYPE_WITH_CODE(AtomTextEditorWidget, atom_text_editor_widget, GTK_TYPE_DRAWING_AREA,
+G_DEFINE_TYPE_WITH_CODE(AtomTextEditorWidget, atom_text_editor_widget, GTK_TYPE_WIDGET,
   G_ADD_PRIVATE(AtomTextEditorWidget)
   G_IMPLEMENT_INTERFACE(GTK_TYPE_SCROLLABLE, NULL)
 )
@@ -280,6 +293,8 @@ AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
   grammar_registry->autoAssignLanguageMode(buffer);
   priv->text_editor = new TextEditor(buffer);
   priv->select_next = new SelectNext(priv->text_editor);
+  const double padding = round(priv->char_width);
+  priv->gutter_width = padding * 4 + round(count_digits(priv->text_editor->getScreenLineCount()) * priv->char_width);
   return self;
 }
 
@@ -290,6 +305,8 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   G_OBJECT_CLASS(klass)->finalize = atom_text_editor_widget_finalize;
   G_OBJECT_CLASS(klass)->set_property = atom_text_editor_widget_set_property;
   G_OBJECT_CLASS(klass)->get_property = atom_text_editor_widget_get_property;
+  GTK_WIDGET_CLASS(klass)->realize = atom_text_editor_widget_realize;
+  GTK_WIDGET_CLASS(klass)->unrealize = atom_text_editor_widget_unrealize;
   GTK_WIDGET_CLASS(klass)->size_allocate = atom_text_editor_widget_size_allocate;
   GTK_WIDGET_CLASS(klass)->draw = atom_text_editor_widget_draw;
   GTK_WIDGET_CLASS(klass)->key_press_event = atom_text_editor_widget_key_press_event;
@@ -446,8 +463,13 @@ static void atom_text_editor_widget_set_property(GObject *object, guint property
     priv->hadjustment = GTK_ADJUSTMENT(g_value_get_object(value));
     break;
   case PROP_VADJUSTMENT:
-    priv->vadjustment = GTK_ADJUSTMENT(g_value_get_object(value));
-    update(self, false);
+    {
+      GtkAdjustment *vadjustment = GTK_ADJUSTMENT(g_value_get_object(value));
+      if (vadjustment != priv->vadjustment) {
+        priv->vadjustment = vadjustment;
+        update(self, false);
+      }
+    }
     break;
   case PROP_HSCROLL_POLICY:
     priv->hscroll_policy = (GtkScrollablePolicy)g_value_get_enum(value);
@@ -481,9 +503,50 @@ static void atom_text_editor_widget_get_property(GObject *object, guint property
   }
 }
 
+static void atom_text_editor_widget_realize(GtkWidget *widget) {
+  AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(widget);
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  gtk_widget_set_realized(widget, TRUE);
+  GtkAllocation allocation;
+  gtk_widget_get_allocation(widget, &allocation);
+  GdkWindowAttr attributes;
+  attributes.window_type = GDK_WINDOW_CHILD;
+  attributes.x = allocation.x;
+  attributes.y = allocation.y;
+  attributes.width = allocation.width;
+  attributes.height = allocation.height;
+  attributes.wclass = GDK_INPUT_OUTPUT;
+  attributes.visual = gtk_widget_get_visual(widget);
+  attributes.event_mask = gtk_widget_get_events(widget) | GDK_EXPOSURE_MASK;
+  GdkWindow *window = gdk_window_new(gtk_widget_get_parent_window(widget), &attributes, GDK_WA_X | GDK_WA_Y | GDK_WA_VISUAL);
+  gtk_widget_set_window(widget, window);
+  gtk_widget_register_window(widget, window);
+  attributes.x = priv->gutter_width;
+  attributes.width = allocation.width - priv->gutter_width;
+  priv->text_window = gdk_window_new(window, &attributes, GDK_WA_X | GDK_WA_Y | GDK_WA_VISUAL);
+  gtk_widget_register_window(widget, priv->text_window);
+  gdk_window_show(priv->text_window);
+  GdkCursor *cursor = gdk_cursor_new_from_name(gdk_window_get_display(priv->text_window), "text");
+  gdk_window_set_cursor(priv->text_window, cursor);
+  g_object_unref(cursor);
+  //GTK_WIDGET_CLASS(atom_text_editor_widget_parent_class)->realize(widget);
+}
+
+static void atom_text_editor_widget_unrealize(GtkWidget *widget) {
+  AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(widget);
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  gtk_widget_unregister_window(widget, priv->text_window);
+  gdk_window_destroy(priv->text_window);
+  GTK_WIDGET_CLASS(atom_text_editor_widget_parent_class)->unrealize(widget);
+}
+
 static void atom_text_editor_widget_size_allocate(GtkWidget *widget, GtkAllocation *allocation) {
   AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(widget);
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   GTK_WIDGET_CLASS(atom_text_editor_widget_parent_class)->size_allocate(widget, allocation);
+  if (gtk_widget_get_realized(widget)) {
+    gdk_window_move_resize(priv->text_window, allocation->x + priv->gutter_width, allocation->y, allocation->width - priv->gutter_width, allocation->height);
+  }
   update(self, false);
 }
 
@@ -627,15 +690,6 @@ static void add_class(std::string &classes, const char *class_) {
     classes += ' ';
   }
   classes += class_;
-}
-
-static int count_digits(int n) {
-  int digits = 1;
-  while (n >= 10) {
-    digits++;
-    n /= 10;
-  }
-  return digits;
 }
 
 static void parse_decoration(
@@ -893,15 +947,13 @@ static void atom_text_editor_widget_handle_pressed(GtkGestureMultiPress *multipr
   AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(user_data);
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   const double vadjustment = gtk_adjustment_get_value(priv->vadjustment);
-  const double padding = round(priv->char_width);
-  const double gutter_width = padding * 4 + round(count_digits(priv->text_editor->getScreenLineCount()) * priv->char_width);
   GdkEventSequence *sequence = gtk_gesture_single_get_current_sequence(GTK_GESTURE_SINGLE(multipress_gesture));
   const GdkEvent *event = gtk_gesture_get_last_event(GTK_GESTURE(multipress_gesture), sequence);
   GdkModifierType state;
   gdk_event_get_state(event, &state);
   const bool modify_selection = state & gtk_widget_get_modifier_mask(GTK_WIDGET(self), GDK_MODIFIER_INTENT_MODIFY_SELECTION);
   const bool extend_selection = state & gtk_widget_get_modifier_mask(GTK_WIDGET(self), GDK_MODIFIER_INTENT_EXTEND_SELECTION);
-  if (x < gutter_width) {
+  if (x < priv->gutter_width) {
     const double row = MAX((y + vadjustment) / priv->line_height, 0.0);
     const double start_buffer_row = priv->text_editor->bufferPositionForScreenPosition({row, 0}).row;
     const double end_buffer_row = priv->text_editor->bufferPositionForScreenPosition({row, INFINITY}).row;
@@ -970,11 +1022,9 @@ static void atom_text_editor_widget_handle_drag_update(GtkGestureDrag *drag_gest
   AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(user_data);
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   const double vadjustment = gtk_adjustment_get_value(priv->vadjustment);
-  const double padding = round(priv->char_width);
-  const double gutter_width = padding * 4 + round(count_digits(priv->text_editor->getScreenLineCount()) * priv->char_width);
   double start_x, start_y;
   gtk_gesture_drag_get_start_point(drag_gesture, &start_x, &start_y);
-  if (start_x < gutter_width) {
+  if (start_x < priv->gutter_width) {
     const double row = MAX((start_y + offset_y + vadjustment) / priv->line_height, 0.0);
     const Range dragged_line_screen_range(Point(row, 0), Point(row + 1, 0));
     const bool reversed = row < priv->initial_screen_range.start.row;
@@ -989,6 +1039,14 @@ static void atom_text_editor_widget_handle_drag_update(GtkGestureDrag *drag_gest
 
 static void update(AtomTextEditorWidget *self, bool redraw) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  const double padding = round(priv->char_width);
+  const double gutter_width = padding * 4 + round(count_digits(priv->text_editor->getScreenLineCount()) * priv->char_width);
+  if (gutter_width != priv->gutter_width) {
+    priv->gutter_width = gutter_width;
+    GtkAllocation allocation;
+    gtk_widget_get_allocation(GTK_WIDGET(self), &allocation);
+    gdk_window_move_resize(priv->text_window, allocation.x + gutter_width, allocation.y, allocation.width - gutter_width, allocation.height);
+  }
   if (priv->vadjustment) {
     const double page_size = gtk_widget_get_allocated_height(GTK_WIDGET(self));
     const double upper = std::max(priv->text_editor->getScreenLineCount() * priv->line_height, page_size);
@@ -1007,12 +1065,10 @@ static void update(AtomTextEditorWidget *self, bool redraw) {
 static void get_row_and_column(AtomTextEditorWidget *self, double x, double y, int &row, int &column) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   const double vadjustment = gtk_adjustment_get_value(priv->vadjustment);
-  const double padding = round(priv->char_width);
-  const double gutter_width = padding * 4 + round(count_digits(priv->text_editor->getScreenLineCount()) * priv->char_width);
   row = MAX((y + vadjustment) / priv->line_height, 0.0);
   if (row < priv->text_editor->getScreenLineCount()) {
     Layout layout = priv->layout_cache->get_layout(self, priv->text_editor->displayLayer->getScreenLine(row));
-    column = layout.x_to_index(x - gutter_width);
+    column = layout.x_to_index(x - priv->gutter_width);
   } else {
     column = 0;
   }

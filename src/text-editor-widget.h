@@ -6,9 +6,9 @@
 G_BEGIN_DECLS
 
 #define ATOM_TYPE_TEXT_EDITOR_WIDGET atom_text_editor_widget_get_type()
-G_DECLARE_DERIVABLE_TYPE(AtomTextEditorWidget, atom_text_editor_widget, ATOM, TEXT_EDITOR_WIDGET, GtkDrawingArea)
+G_DECLARE_DERIVABLE_TYPE(AtomTextEditorWidget, atom_text_editor_widget, ATOM, TEXT_EDITOR_WIDGET, GtkWidget)
 struct _AtomTextEditorWidgetClass {
-  GtkDrawingAreaClass parent_class;
+  GtkWidgetClass parent_class;
   void (*move_up)(AtomTextEditorWidget *);
   void (*move_down)(AtomTextEditorWidget *);
   void (*move_left)(AtomTextEditorWidget *);
