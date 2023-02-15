@@ -74,6 +74,8 @@ static void atom_text_editor_widget_backspace(AtomTextEditorWidget *);
 static void atom_text_editor_widget_delete(AtomTextEditorWidget *);
 static void atom_text_editor_widget_delete_to_beginning_of_word(AtomTextEditorWidget *);
 static void atom_text_editor_widget_delete_to_end_of_word(AtomTextEditorWidget *);
+static void atom_text_editor_widget_delete_to_beginning_of_subword(AtomTextEditorWidget *);
+static void atom_text_editor_widget_delete_to_end_of_subword(AtomTextEditorWidget *);
 static void atom_text_editor_widget_indent(AtomTextEditorWidget *);
 static void atom_text_editor_widget_outdent_selected_rows(AtomTextEditorWidget *);
 static void atom_text_editor_widget_delete_line(AtomTextEditorWidget *);
@@ -348,6 +350,8 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   klass->delete_ = atom_text_editor_widget_delete;
   klass->delete_to_beginning_of_word = atom_text_editor_widget_delete_to_beginning_of_word;
   klass->delete_to_end_of_word = atom_text_editor_widget_delete_to_end_of_word;
+  klass->delete_to_beginning_of_subword = atom_text_editor_widget_delete_to_beginning_of_subword;
+  klass->delete_to_end_of_subword = atom_text_editor_widget_delete_to_end_of_subword;
   klass->indent = atom_text_editor_widget_indent;
   klass->outdent_selected_rows = atom_text_editor_widget_outdent_selected_rows;
   klass->delete_line = atom_text_editor_widget_delete_line;
@@ -391,6 +395,8 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   ADD_SIGNAL("delete", delete_);
   ADD_SIGNAL("delete-to-beginning-of-word", delete_to_beginning_of_word);
   ADD_SIGNAL("delete-to-end-of-word", delete_to_end_of_word);
+  ADD_SIGNAL("delete-to-beginning-of-subword", delete_to_beginning_of_subword);
+  ADD_SIGNAL("delete-to-end-of-subword", delete_to_end_of_subword);
   ADD_SIGNAL("indent", indent);
   ADD_SIGNAL("outdent-selected-rows", outdent_selected_rows);
   ADD_SIGNAL("delete-line", delete_line);
@@ -1293,6 +1299,18 @@ static void atom_text_editor_widget_delete_to_beginning_of_word(AtomTextEditorWi
 static void atom_text_editor_widget_delete_to_end_of_word(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   priv->text_editor->deleteToEndOfWord();
+  update(self);
+}
+
+static void atom_text_editor_widget_delete_to_beginning_of_subword(AtomTextEditorWidget *self) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  priv->text_editor->deleteToBeginningOfSubword();
+  update(self);
+}
+
+static void atom_text_editor_widget_delete_to_end_of_subword(AtomTextEditorWidget *self) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  priv->text_editor->deleteToEndOfSubword();
   update(self);
 }
 

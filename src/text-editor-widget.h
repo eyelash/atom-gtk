@@ -46,6 +46,8 @@ struct _AtomTextEditorWidgetClass {
   void (*delete_)(AtomTextEditorWidget *);
   void (*delete_to_beginning_of_word)(AtomTextEditorWidget *);
   void (*delete_to_end_of_word)(AtomTextEditorWidget *);
+  void (*delete_to_beginning_of_subword)(AtomTextEditorWidget *);
+  void (*delete_to_end_of_subword)(AtomTextEditorWidget *);
   void (*indent)(AtomTextEditorWidget *);
   void (*outdent_selected_rows)(AtomTextEditorWidget *);
   void (*delete_line)(AtomTextEditorWidget *);

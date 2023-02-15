@@ -32,6 +32,8 @@
   bind "<Control><Shift>Return" { "insert-newline-above"() };
   bind "<Control>BackSpace" { "delete-to-beginning-of-word"() };
   bind "<Control>Delete" { "delete-to-end-of-word"() };
+  bind "<Alt>BackSpace" { "delete-to-beginning-of-subword"() };
+  bind "<Alt>Delete" { "delete-to-end-of-subword"() };
   bind "<Shift>Tab" { "outdent-selected-rows"() };
 
   bind "<Control>Up" { "move-line-up"() };
