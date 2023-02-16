@@ -953,6 +953,7 @@ static void atom_text_editor_widget_handle_pressed(GtkGestureMultiPress *multipr
   AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(user_data);
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   const double vadjustment = gtk_adjustment_get_value(priv->vadjustment);
+  gtk_widget_grab_focus(GTK_WIDGET(self));
   GdkEventSequence *sequence = gtk_gesture_single_get_current_sequence(GTK_GESTURE_SINGLE(multipress_gesture));
   const GdkEvent *event = gtk_gesture_get_last_event(GTK_GESTURE(multipress_gesture), sequence);
   GdkModifierType state;

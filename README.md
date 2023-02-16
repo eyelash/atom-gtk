@@ -1,3 +1,5 @@
+![screenshot](screenshot.png)
+
 ## Roadmap
 
 - [x] multiple selections
