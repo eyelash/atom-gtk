@@ -19,10 +19,16 @@ class Window : Gtk.ApplicationWindow {
     set_titlebar(header_bar);
 
     set_default_size(750, 500);
+    var box = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
     var scrolled_window = new Gtk.ScrolledWindow(null, null);
     text_editor_widget = new Atom.TextEditorWidget(file);
     scrolled_window.add(text_editor_widget);
-    add(scrolled_window);
+    box.pack_start(scrolled_window, true);
+    var status_bar = new Gtk.Statusbar();
+    status_bar.margin = 0;
+    status_bar.pack_end(new Gtk.Label("UTF-8"), false);
+    box.pack_start(status_bar, false);
+    add(box);
   }
 
   private void open() {
