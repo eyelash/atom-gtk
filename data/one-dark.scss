@@ -1,3 +1,11 @@
+@function fadein($color, $amount) {
+  @return adjust-color($color, $alpha: $amount / 100%);
+}
+
+@function fadeout($color, $amount) {
+  @return adjust-color($color, $alpha: -$amount / 100%);
+}
+
 @function fade($color, $amount) {
   @return change-color($color, $alpha: $amount / 100%);
 }
@@ -256,6 +264,18 @@ $scrollbar-background-color:        $level-3-color; // replaced `transparent` wi
 $scrollbar-color-editor:            lighten($ui-syntax-color, 16%);
 $scrollbar-background-color-editor: $ui-syntax-color;
 
+$tab-text-color:                    $text-color-subtle;
+$tab-text-color-active:             $text-color-highlight;
+$tab-text-color-editor:             contrast($ui-syntax-color, darken($ui-syntax-color, 50%), $text-color-highlight );
+$tab-background-color-editor:       $ui-syntax-color;
+$tab-inactive-status-added:         fade($text-color-success, 55%);
+$tab-inactive-status-modified:      fade($text-color-warning, 55%);
+$tab-bar-background-color:         $level-3-color;
+$tab-bar-border-color:             $base-border-color;
+$tab-background-color:             $level-3-color;
+$tab-background-color-active:      $level-2-color;
+$tab-border-color:                 $base-border-color;
+
 window {
 
   headerbar.titlebar {
@@ -300,6 +320,59 @@ window {
     slider {
       background-color: $scrollbar-color-editor;
       border-color: $scrollbar-background-color-editor;
+    }
+  }
+
+  notebook {
+    header {
+      background-color: $tab-bar-background-color;
+      border-bottom: 1px solid $tab-border-color;
+    }
+    tabs {
+      padding: 0;
+    }
+    tab {
+      margin: 0;
+      color: $tab-text-color;
+      font-weight: normal;
+      border-left: 1px solid $tab-border-color;
+      box-shadow: none;
+      &:checked {
+        color: $tab-text-color-active;
+        background-color: $tab-background-color-active;
+        border-left-color: $accent-color;
+        box-shadow: inset 1px 0 $accent-color;
+      }
+      &:first-child:not(:checked) {
+        border-left-color: transparent;
+      }
+      &:last-child {
+        &:not(:checked) {
+          box-shadow: 1px 0 $tab-border-color;
+        }
+        &:checked {
+          box-shadow: inset 1px 0 $accent-color, 1px 0 $tab-border-color;
+        }
+      }
+      button {
+        color: transparent;
+        background-color: transparent;
+        background-image: none;
+        border-color: transparent;
+        box-shadow: none;
+        outline: none;
+        transition-duration: 0;
+      }
+      &:hover button {
+        color: inherit;
+        &:hover {
+          color: $accent-text-color;
+          background-color: $accent-color;
+        }
+        &:active {
+          background-color: fade($accent-color, 50%);
+        }
+      }
     }
   }
 
