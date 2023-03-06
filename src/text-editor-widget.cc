@@ -82,6 +82,8 @@ static void atom_text_editor_widget_delete_line(AtomTextEditorWidget *);
 static void atom_text_editor_widget_duplicate_lines(AtomTextEditorWidget *);
 static void atom_text_editor_widget_move_line_up(AtomTextEditorWidget *);
 static void atom_text_editor_widget_move_line_down(AtomTextEditorWidget *);
+static void atom_text_editor_widget_undo(AtomTextEditorWidget *);
+static void atom_text_editor_widget_redo(AtomTextEditorWidget *);
 
 class Layout {
   PangoLayout *layout;
@@ -358,6 +360,8 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   klass->duplicate_lines = atom_text_editor_widget_duplicate_lines;
   klass->move_line_up = atom_text_editor_widget_move_line_up;
   klass->move_line_down = atom_text_editor_widget_move_line_down;
+  klass->undo = atom_text_editor_widget_undo;
+  klass->redo = atom_text_editor_widget_redo;
   ADD_SIGNAL("move-up", move_up);
   ADD_SIGNAL("move-down", move_down);
   ADD_SIGNAL("move-left", move_left);
@@ -403,6 +407,8 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   ADD_SIGNAL("duplicate-lines", duplicate_lines);
   ADD_SIGNAL("move-line-up", move_line_up);
   ADD_SIGNAL("move-line-down", move_line_down);
+  ADD_SIGNAL("undo", undo);
+  ADD_SIGNAL("redo", redo);
   g_object_class_override_property(G_OBJECT_CLASS(klass), PROP_HADJUSTMENT, "hadjustment");
   g_object_class_override_property(G_OBJECT_CLASS(klass), PROP_VADJUSTMENT, "vadjustment");
   g_object_class_override_property(G_OBJECT_CLASS(klass), PROP_HSCROLL_POLICY, "hscroll-policy");
@@ -944,7 +950,7 @@ static void atom_text_editor_widget_commit(GtkIMContext *im_context, gchar *text
   AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(user_data);
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   gunichar2 *utf16 = g_utf8_to_utf16(text, -1, NULL, NULL, NULL);
-  priv->text_editor->insertText((const char16_t *)utf16);
+  priv->text_editor->insertText((const char16_t *)utf16, true);
   g_free(utf16);
   update(self);
 }
@@ -1281,13 +1287,17 @@ static void atom_text_editor_widget_insert_newline_below(AtomTextEditorWidget *s
 
 static void atom_text_editor_widget_backspace(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->backspace();
+  priv->text_editor->transact(priv->text_editor->getUndoGroupingInterval(), [&]() {
+    priv->text_editor->backspace();
+  });
   update(self);
 }
 
 static void atom_text_editor_widget_delete(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->delete_();
+  priv->text_editor->transact(priv->text_editor->getUndoGroupingInterval(), [&]() {
+    priv->text_editor->delete_();
+  });
   update(self);
 }
 
@@ -1348,5 +1358,17 @@ static void atom_text_editor_widget_move_line_up(AtomTextEditorWidget *self) {
 static void atom_text_editor_widget_move_line_down(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   priv->text_editor->moveLineDown();
+  update(self);
+}
+
+static void atom_text_editor_widget_undo(AtomTextEditorWidget *self) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  priv->text_editor->undo();
+  update(self);
+}
+
+static void atom_text_editor_widget_redo(AtomTextEditorWidget *self) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  priv->text_editor->redo();
   update(self);
 }

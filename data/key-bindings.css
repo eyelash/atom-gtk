@@ -47,6 +47,10 @@
   bind "<Alt><Shift>Up" { "add-selection-above"() };
   bind "<Alt><Shift>Down" { "add-selection-below"() };
   bind "<Primary>D" { "select-next"() };
+
+  bind "<Primary>Z" { "undo"() };
+  bind "<Primary>Y" { "redo"() };
+  bind "<Primary><Shift>Z" { "redo"() };
 }
 
 atom-text-editor {

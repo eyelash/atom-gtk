@@ -6,7 +6,7 @@
 - [x] select next
 - [x] syntax highlighting
 - [ ] copy/paste
-- [ ] undo/redo
+- [x] undo/redo
 - [ ] find/replace
 - [ ] git gutter
 - [ ] fuzzy finder
