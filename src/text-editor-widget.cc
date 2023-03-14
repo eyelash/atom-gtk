@@ -85,6 +85,23 @@ static void atom_text_editor_widget_move_line_down(AtomTextEditorWidget *);
 static void atom_text_editor_widget_undo(AtomTextEditorWidget *);
 static void atom_text_editor_widget_redo(AtomTextEditorWidget *);
 
+// convert between UTF-8 pointers and UTF-16 offsets
+static const gchar *offset_to_pointer(const gchar *str, glong offset) {
+  while (offset > 0) {
+    offset -= g_utf8_get_char(str) < 0x10000 ? 1 : 2;
+    str = g_utf8_next_char(str);
+  }
+  return str;
+}
+static glong pointer_to_offset(const gchar *str, const gchar *pos) {
+  glong offset = 0;
+  while (str < pos) {
+    offset += g_utf8_get_char(str) < 0x10000 ? 1 : 2;
+    str = g_utf8_next_char(str);
+  }
+  return offset;
+}
+
 class Layout {
   PangoLayout *layout;
 public:
@@ -119,7 +136,7 @@ public:
   }
   double index_to_x(int index) const {
     const char *text = pango_layout_get_text(layout);
-    index = g_utf8_offset_to_pointer(text, index) - text;
+    index = offset_to_pointer(text, index) - text;
     int x_pos;
     pango_layout_line_index_to_x(pango_layout_get_line_readonly(layout, 0), index, false, &x_pos);
     return pango_units_to_double(x_pos);
@@ -132,7 +149,7 @@ public:
     for (; trailing > 0; trailing--) {
       pointer = g_utf8_next_char(pointer);
     }
-    return g_utf8_pointer_to_offset(text, pointer);
+    return pointer_to_offset(text, pointer);
   }
 };
 
@@ -613,26 +630,26 @@ static void emit_attributes(StyleCache *style_cache, GtkWidget *widget, gchar *u
     PangoStyle font_style;
     style_cache->get_property(widget, classes, "font-style", &font_style);
     PangoAttribute *attr = pango_attr_style_new(font_style);
-    attr->start_index = g_utf8_offset_to_pointer(utf8, last_index) - utf8;
-    attr->end_index = g_utf8_offset_to_pointer(utf8, index) - utf8;
+    attr->start_index = offset_to_pointer(utf8, last_index) - utf8;
+    attr->end_index = offset_to_pointer(utf8, index) - utf8;
     pango_attr_list_insert(attrs, attr);
 
     PangoWeight font_weight;
     style_cache->get_property(widget, classes, "font-weight", &font_weight);
     attr = pango_attr_weight_new(font_weight);
-    attr->start_index = g_utf8_offset_to_pointer(utf8, last_index) - utf8;
-    attr->end_index = g_utf8_offset_to_pointer(utf8, index) - utf8;
+    attr->start_index = offset_to_pointer(utf8, last_index) - utf8;
+    attr->end_index = offset_to_pointer(utf8, index) - utf8;
     pango_attr_list_insert(attrs, attr);
 
     GdkRGBA text_color;
     style_cache->get_property(widget, classes, "color", &text_color);
     attr = pango_attr_foreground_new(text_color.red * G_MAXUINT16, text_color.green * G_MAXUINT16, text_color.blue * G_MAXUINT16);
-    attr->start_index = g_utf8_offset_to_pointer(utf8, last_index) - utf8;
-    attr->end_index = g_utf8_offset_to_pointer(utf8, index) - utf8;
+    attr->start_index = offset_to_pointer(utf8, last_index) - utf8;
+    attr->end_index = offset_to_pointer(utf8, index) - utf8;
     pango_attr_list_insert(attrs, attr);
     attr = pango_attr_foreground_alpha_new(text_color.alpha * G_MAXUINT16);
-    attr->start_index = g_utf8_offset_to_pointer(utf8, last_index) - utf8;
-    attr->end_index = g_utf8_offset_to_pointer(utf8, index) - utf8;
+    attr->start_index = offset_to_pointer(utf8, last_index) - utf8;
+    attr->end_index = offset_to_pointer(utf8, index) - utf8;
     pango_attr_list_insert(attrs, attr);
   }
 
