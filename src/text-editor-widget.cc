@@ -47,6 +47,8 @@ static void atom_text_editor_widget_move_to_beginning_of_word(AtomTextEditorWidg
 static void atom_text_editor_widget_move_to_end_of_word(AtomTextEditorWidget *);
 static void atom_text_editor_widget_move_to_previous_subword_boundary(AtomTextEditorWidget *);
 static void atom_text_editor_widget_move_to_next_subword_boundary(AtomTextEditorWidget *);
+static void atom_text_editor_widget_page_up(AtomTextEditorWidget *);
+static void atom_text_editor_widget_page_down(AtomTextEditorWidget *);
 static void atom_text_editor_widget_move_to_top(AtomTextEditorWidget *);
 static void atom_text_editor_widget_move_to_bottom(AtomTextEditorWidget *);
 static void atom_text_editor_widget_select_all(AtomTextEditorWidget *);
@@ -60,6 +62,8 @@ static void atom_text_editor_widget_select_to_beginning_of_word(AtomTextEditorWi
 static void atom_text_editor_widget_select_to_end_of_word(AtomTextEditorWidget *);
 static void atom_text_editor_widget_select_to_previous_subword_boundary(AtomTextEditorWidget *);
 static void atom_text_editor_widget_select_to_next_subword_boundary(AtomTextEditorWidget *);
+static void atom_text_editor_widget_select_page_up(AtomTextEditorWidget *);
+static void atom_text_editor_widget_select_page_down(AtomTextEditorWidget *);
 static void atom_text_editor_widget_select_to_top(AtomTextEditorWidget *);
 static void atom_text_editor_widget_select_to_bottom(AtomTextEditorWidget *);
 static void atom_text_editor_widget_select_line(AtomTextEditorWidget *);
@@ -342,6 +346,8 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   klass->move_to_end_of_word = atom_text_editor_widget_move_to_end_of_word;
   klass->move_to_previous_subword_boundary = atom_text_editor_widget_move_to_previous_subword_boundary;
   klass->move_to_next_subword_boundary = atom_text_editor_widget_move_to_next_subword_boundary;
+  klass->page_up = atom_text_editor_widget_page_up;
+  klass->page_down = atom_text_editor_widget_page_down;
   klass->move_to_top = atom_text_editor_widget_move_to_top;
   klass->move_to_bottom = atom_text_editor_widget_move_to_bottom;
   klass->select_all = atom_text_editor_widget_select_all;
@@ -355,6 +361,8 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   klass->select_to_end_of_word = atom_text_editor_widget_select_to_end_of_word;
   klass->select_to_previous_subword_boundary = atom_text_editor_widget_select_to_previous_subword_boundary;
   klass->select_to_next_subword_boundary = atom_text_editor_widget_select_to_next_subword_boundary;
+  klass->select_page_up = atom_text_editor_widget_select_page_up;
+  klass->select_page_down = atom_text_editor_widget_select_page_down;
   klass->select_to_top = atom_text_editor_widget_select_to_top;
   klass->select_to_bottom = atom_text_editor_widget_select_to_bottom;
   klass->select_line = atom_text_editor_widget_select_line;
@@ -389,6 +397,8 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   ADD_SIGNAL("move-to-end-of-word", move_to_end_of_word);
   ADD_SIGNAL("move-to-previous-subword-boundary", move_to_previous_subword_boundary);
   ADD_SIGNAL("move-to-next-subword-boundary", move_to_next_subword_boundary);
+  ADD_SIGNAL("page-up", page_up);
+  ADD_SIGNAL("page-down", page_down);
   ADD_SIGNAL("move-to-top", move_to_top);
   ADD_SIGNAL("move-to-bottom", move_to_bottom);
   ADD_SIGNAL("select-all", select_all);
@@ -402,6 +412,8 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   ADD_SIGNAL("select-to-end-of-word", select_to_end_of_word);
   ADD_SIGNAL("select-to-previous-subword-boundary", select_to_previous_subword_boundary);
   ADD_SIGNAL("select-to-next-subword-boundary", select_to_next_subword_boundary);
+  ADD_SIGNAL("select-page-up", select_page_up);
+  ADD_SIGNAL("select-page-down", select_page_down);
   ADD_SIGNAL("select-to-top", select_to_top);
   ADD_SIGNAL("select-to-bottom", select_to_bottom);
   ADD_SIGNAL("select-line", select_line);
@@ -1104,6 +1116,13 @@ static void get_row_and_column(AtomTextEditorWidget *self, double x, double y, i
   }
 }
 
+static double get_rows_per_page(AtomTextEditorWidget *self) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  const double client_height = gtk_widget_get_allocated_height(GTK_WIDGET(self));
+  const double line_height = priv->line_height;
+  return std::max(1.0, std::ceil(client_height / line_height));
+}
+
 static void atom_text_editor_widget_move_up(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   priv->text_editor->moveUp();
@@ -1167,6 +1186,18 @@ static void atom_text_editor_widget_move_to_next_subword_boundary(AtomTextEditor
 static void atom_text_editor_widget_move_to_top(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   priv->text_editor->moveToTop();
+  gtk_widget_queue_draw(GTK_WIDGET(self));
+}
+
+static void atom_text_editor_widget_page_up(AtomTextEditorWidget *self) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  priv->text_editor->moveUp(get_rows_per_page(self));
+  gtk_widget_queue_draw(GTK_WIDGET(self));
+}
+
+static void atom_text_editor_widget_page_down(AtomTextEditorWidget *self) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  priv->text_editor->moveDown(get_rows_per_page(self));
   gtk_widget_queue_draw(GTK_WIDGET(self));
 }
 
@@ -1239,6 +1270,18 @@ static void atom_text_editor_widget_select_to_previous_subword_boundary(AtomText
 static void atom_text_editor_widget_select_to_next_subword_boundary(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   priv->text_editor->selectToNextSubwordBoundary();
+  gtk_widget_queue_draw(GTK_WIDGET(self));
+}
+
+static void atom_text_editor_widget_select_page_up(AtomTextEditorWidget *self) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  priv->text_editor->selectUp(get_rows_per_page(self));
+  gtk_widget_queue_draw(GTK_WIDGET(self));
+}
+
+static void atom_text_editor_widget_select_page_down(AtomTextEditorWidget *self) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  priv->text_editor->selectDown(get_rows_per_page(self));
   gtk_widget_queue_draw(GTK_WIDGET(self));
 }
 

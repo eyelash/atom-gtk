@@ -9,6 +9,8 @@
   bind "<Control>Right" { "move-to-end-of-word"() };
   bind "<Alt>Left" { "move-to-previous-subword-boundary"() };
   bind "<Alt>Right" { "move-to-next-subword-boundary"() };
+  bind "Page_Up" { "page-up"() };
+  bind "Page_Down" { "page-down"() };
   bind "<Control>Home" { "move-to-top"() };
   bind "<Control>End" { "move-to-bottom"() };
   bind "<Shift>Up" { "select-up"() };
@@ -21,6 +23,8 @@
   bind "<Control><Shift>Right" { "select-to-end-of-word"() };
   bind "<Alt><Shift>Left" { "select-to-previous-subword-boundary"() };
   bind "<Alt><Shift>Right" { "select-to-next-subword-boundary"() };
+  bind "<Shift>Page_Up" { "select-page-up"() };
+  bind "<Shift>Page_Down" { "select-page-down"() };
   bind "<Control><Shift>Home" { "select-to-top"() };
   bind "<Control><Shift>End" { "select-to-bottom"() };
 
