@@ -283,7 +283,7 @@ window {
     background-image: none;
     border-bottom: 1px solid $base-border-color;
     color: $text-color;
-    button:not(.titlebutton) {
+    button {
       background-color: $button-background-color;
       background-image: linear-gradient(lighten($button-background-color, 2%), $button-background-color);
       box-shadow: none;
@@ -291,6 +291,11 @@ window {
       color: $text-color;
       border: 1px solid $button-border-color;
       transition-duration: 0;
+      &.titlebutton:not(:hover) {
+        background-color: transparent;
+        background-image: none;
+        border-color: transparent;
+      }
       &:hover {
         color: $text-color-highlight;
         background-image: linear-gradient(lighten($button-background-color-hover, 2%), $button-background-color-hover);
