@@ -2,6 +2,7 @@
 #include "layout-cache.h"
 #include <grammar-registry.h>
 #include <text-editor.h>
+#include <display-marker-layer.h>
 #include <display-marker.h>
 #include <decoration-manager.h>
 #include <selection.h>
@@ -36,6 +37,7 @@ static void atom_text_editor_widget_handle_pressed(GtkGestureMultiPress *, gint,
 static void atom_text_editor_widget_handle_released(GtkGestureMultiPress *, gint, gdouble, gdouble, gpointer);
 static void atom_text_editor_widget_handle_drag_update(GtkGestureDrag *, gdouble, gdouble, gpointer);
 static void update(AtomTextEditorWidget *, bool = true);
+static void autoscroll(AtomTextEditorWidget *, Range);
 static void get_row_and_column(AtomTextEditorWidget *, double, double, int &, int &);
 static void atom_text_editor_widget_move_up(AtomTextEditorWidget *);
 static void atom_text_editor_widget_move_down(AtomTextEditorWidget *);
@@ -285,7 +287,7 @@ G_DEFINE_TYPE_WITH_CODE(AtomTextEditorWidget, atom_text_editor_widget, GTK_TYPE_
   G_IMPLEMENT_INTERFACE(GTK_TYPE_SCROLLABLE, NULL)
 )
 
-#define GET_PRIVATE(x) (AtomTextEditorWidgetPrivate *)atom_text_editor_widget_get_instance_private(ATOM_TEXT_EDITOR_WIDGET(x))
+#define GET_PRIVATE(x) ((AtomTextEditorWidgetPrivate *)atom_text_editor_widget_get_instance_private(ATOM_TEXT_EDITOR_WIDGET(x)))
 
 typedef enum {
   PROP_0,
@@ -318,6 +320,15 @@ AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
   grammar_registry->autoAssignLanguageMode(buffer);
   priv->text_editor = new TextEditor(buffer);
   priv->select_next = new SelectNext(priv->text_editor);
+  priv->text_editor->onDidChange([self]() {
+    update(self);
+  });
+  priv->text_editor->selectionsMarkerLayer->onDidUpdate([self]() {
+    gtk_widget_queue_draw(GTK_WIDGET(self));
+  });
+  priv->text_editor->onDidRequestAutoscroll([self](Range range) {
+    autoscroll(self, range);
+  });
   const double padding = round(priv->char_width);
   priv->gutter_width = padding * 4 + round(count_digits(priv->text_editor->getScreenLineCount()) * priv->char_width);
   return self;
@@ -981,7 +992,6 @@ static void atom_text_editor_widget_commit(GtkIMContext *im_context, gchar *text
   gunichar2 *utf16 = g_utf8_to_utf16(text, -1, NULL, NULL, NULL);
   priv->text_editor->insertText((const char16_t *)utf16, true);
   g_free(utf16);
-  update(self);
 }
 
 static void atom_text_editor_widget_handle_pressed(GtkGestureMultiPress *multipress_gesture, gint n_press, gdouble x, gdouble y, gpointer user_data) {
@@ -1104,6 +1114,18 @@ static void update(AtomTextEditorWidget *self, bool redraw) {
   if (redraw) gtk_widget_queue_draw(GTK_WIDGET(self));
 }
 
+static void autoscroll(AtomTextEditorWidget *self, Range range) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  const double min_value = std::min((range.end.row + 1) * priv->line_height + 50, gtk_adjustment_get_upper(priv->vadjustment)) - gtk_adjustment_get_page_size(priv->vadjustment);
+  const double max_value = std::max(range.start.row * priv->line_height - 50, 0.0);
+  if (gtk_adjustment_get_value(priv->vadjustment) > max_value) {
+    gtk_adjustment_set_value(priv->vadjustment, max_value);
+  }
+  if (gtk_adjustment_get_value(priv->vadjustment) < min_value) {
+    gtk_adjustment_set_value(priv->vadjustment, min_value);
+  }
+}
+
 static void get_row_and_column(AtomTextEditorWidget *self, double x, double y, int &row, int &column) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   const double vadjustment = gtk_adjustment_get_value(priv->vadjustment);
@@ -1124,225 +1146,151 @@ static double get_rows_per_page(AtomTextEditorWidget *self) {
 }
 
 static void atom_text_editor_widget_move_up(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->moveUp();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->moveUp();
 }
 
 static void atom_text_editor_widget_move_down(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->moveDown();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->moveDown();
 }
 
 static void atom_text_editor_widget_move_left(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->moveLeft();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->moveLeft();
 }
 
 static void atom_text_editor_widget_move_right(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->moveRight();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->moveRight();
 }
 
 static void atom_text_editor_widget_move_to_first_character_of_line(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->moveToFirstCharacterOfLine();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->moveToFirstCharacterOfLine();
 }
 
 static void atom_text_editor_widget_move_to_end_of_line(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->moveToEndOfLine();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->moveToEndOfLine();
 }
 
 static void atom_text_editor_widget_move_to_beginning_of_word(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->moveToBeginningOfWord();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->moveToBeginningOfWord();
 }
 
 static void atom_text_editor_widget_move_to_end_of_word(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->moveToEndOfWord();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->moveToEndOfWord();
 }
 
 static void atom_text_editor_widget_move_to_previous_subword_boundary(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->moveToPreviousSubwordBoundary();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->moveToPreviousSubwordBoundary();
 }
 
 static void atom_text_editor_widget_move_to_next_subword_boundary(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->moveToNextSubwordBoundary();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->moveToNextSubwordBoundary();
 }
 
 static void atom_text_editor_widget_move_to_top(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->moveToTop();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->moveToTop();
 }
 
 static void atom_text_editor_widget_page_up(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->moveUp(get_rows_per_page(self));
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->moveUp(get_rows_per_page(self));
 }
 
 static void atom_text_editor_widget_page_down(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->moveDown(get_rows_per_page(self));
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->moveDown(get_rows_per_page(self));
 }
 
 static void atom_text_editor_widget_move_to_bottom(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->moveToBottom();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->moveToBottom();
 }
 
 static void atom_text_editor_widget_select_all(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->selectAll();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->selectAll();
 }
 
 static void atom_text_editor_widget_select_up(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->selectUp();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->selectUp();
 }
 
 static void atom_text_editor_widget_select_down(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->selectDown();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->selectDown();
 }
 
 static void atom_text_editor_widget_select_left(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->selectLeft();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->selectLeft();
 }
 
 static void atom_text_editor_widget_select_right(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->selectRight();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->selectRight();
 }
 
 static void atom_text_editor_widget_select_to_first_character_of_line(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->selectToFirstCharacterOfLine();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->selectToFirstCharacterOfLine();
 }
 
 static void atom_text_editor_widget_select_to_end_of_line(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->selectToEndOfLine();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->selectToEndOfLine();
 }
 
 static void atom_text_editor_widget_select_to_beginning_of_word(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->selectToBeginningOfWord();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->selectToBeginningOfWord();
 }
 
 static void atom_text_editor_widget_select_to_end_of_word(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->selectToEndOfWord();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->selectToEndOfWord();
 }
 
 static void atom_text_editor_widget_select_to_previous_subword_boundary(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->selectToPreviousSubwordBoundary();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->selectToPreviousSubwordBoundary();
 }
 
 static void atom_text_editor_widget_select_to_next_subword_boundary(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->selectToNextSubwordBoundary();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->selectToNextSubwordBoundary();
 }
 
 static void atom_text_editor_widget_select_page_up(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->selectUp(get_rows_per_page(self));
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->selectUp(get_rows_per_page(self));
 }
 
 static void atom_text_editor_widget_select_page_down(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->selectDown(get_rows_per_page(self));
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->selectDown(get_rows_per_page(self));
 }
 
 static void atom_text_editor_widget_select_to_top(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->selectToTop();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->selectToTop();
 }
 
 static void atom_text_editor_widget_select_to_bottom(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->selectToBottom();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->selectToBottom();
 }
 
 static void atom_text_editor_widget_select_line(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->selectLinesContainingCursors();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->selectLinesContainingCursors();
 }
 
 static void atom_text_editor_widget_consolidate_selections(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->consolidateSelections();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->consolidateSelections();
 }
 
 static void atom_text_editor_widget_add_selection_above(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->addSelectionAbove();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->addSelectionAbove();
 }
 
 static void atom_text_editor_widget_add_selection_below(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->addSelectionBelow();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->text_editor->addSelectionBelow();
 }
 
 static void atom_text_editor_widget_select_next(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->select_next->findAndSelectNext();
-  gtk_widget_queue_draw(GTK_WIDGET(self));
+  GET_PRIVATE(self)->select_next->findAndSelectNext();
 }
 
 static void atom_text_editor_widget_insert_newline(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->insertNewline();
-  update(self);
+  GET_PRIVATE(self)->text_editor->insertNewline();
 }
 
 static void atom_text_editor_widget_insert_newline_above(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->insertNewlineAbove();
-  update(self);
+  GET_PRIVATE(self)->text_editor->insertNewlineAbove();
 }
 
 static void atom_text_editor_widget_insert_newline_below(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->insertNewlineBelow();
-  update(self);
+  GET_PRIVATE(self)->text_editor->insertNewlineBelow();
 }
 
 static void atom_text_editor_widget_backspace(AtomTextEditorWidget *self) {
@@ -1350,7 +1298,6 @@ static void atom_text_editor_widget_backspace(AtomTextEditorWidget *self) {
   priv->text_editor->transact(priv->text_editor->getUndoGroupingInterval(), [&]() {
     priv->text_editor->backspace();
   });
-  update(self);
 }
 
 static void atom_text_editor_widget_delete(AtomTextEditorWidget *self) {
@@ -1358,77 +1305,52 @@ static void atom_text_editor_widget_delete(AtomTextEditorWidget *self) {
   priv->text_editor->transact(priv->text_editor->getUndoGroupingInterval(), [&]() {
     priv->text_editor->delete_();
   });
-  update(self);
 }
 
 static void atom_text_editor_widget_delete_to_beginning_of_word(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->deleteToBeginningOfWord();
-  update(self);
+  GET_PRIVATE(self)->text_editor->deleteToBeginningOfWord();
 }
 
 static void atom_text_editor_widget_delete_to_end_of_word(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->deleteToEndOfWord();
-  update(self);
+  GET_PRIVATE(self)->text_editor->deleteToEndOfWord();
 }
 
 static void atom_text_editor_widget_delete_to_beginning_of_subword(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->deleteToBeginningOfSubword();
-  update(self);
+  GET_PRIVATE(self)->text_editor->deleteToBeginningOfSubword();
 }
 
 static void atom_text_editor_widget_delete_to_end_of_subword(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->deleteToEndOfSubword();
-  update(self);
+  GET_PRIVATE(self)->text_editor->deleteToEndOfSubword();
 }
 
 static void atom_text_editor_widget_indent(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->indent();
-  update(self);
+  GET_PRIVATE(self)->text_editor->indent();
 }
 
 static void atom_text_editor_widget_outdent_selected_rows(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->outdentSelectedRows();
-  update(self);
+  GET_PRIVATE(self)->text_editor->outdentSelectedRows();
 }
 
 static void atom_text_editor_widget_delete_line(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->deleteLine();
-  update(self);
+  GET_PRIVATE(self)->text_editor->deleteLine();
 }
 
 static void atom_text_editor_widget_duplicate_lines(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->duplicateLines();
-  update(self);
+  GET_PRIVATE(self)->text_editor->duplicateLines();
 }
 
 static void atom_text_editor_widget_move_line_up(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->moveLineUp();
-  update(self);
+  GET_PRIVATE(self)->text_editor->moveLineUp();
 }
 
 static void atom_text_editor_widget_move_line_down(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->moveLineDown();
-  update(self);
+  GET_PRIVATE(self)->text_editor->moveLineDown();
 }
 
 static void atom_text_editor_widget_undo(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->undo();
-  update(self);
+  GET_PRIVATE(self)->text_editor->undo();
 }
 
 static void atom_text_editor_widget_redo(AtomTextEditorWidget *self) {
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  priv->text_editor->redo();
-  update(self);
+  GET_PRIVATE(self)->text_editor->redo();
 }
