@@ -18,6 +18,7 @@ extern "C" TreeSitterGrammar *atom_language_python();
 #endif
 
 #define LINE_HEIGHT_FACTOR 1.5
+#define CURSOR_BLINK_PERIOD 800
 
 static void atom_text_editor_widget_dispose(GObject *);
 static void atom_text_editor_widget_finalize(GObject *);
@@ -26,6 +27,8 @@ static void atom_text_editor_widget_get_property(GObject *, guint, GValue *, GPa
 static void atom_text_editor_widget_realize(GtkWidget *);
 static void atom_text_editor_widget_unrealize(GtkWidget *);
 static void atom_text_editor_widget_size_allocate(GtkWidget *, GtkAllocation *);
+static gboolean atom_text_editor_widget_focus_in_event(GtkWidget *, GdkEventFocus *);
+static gboolean atom_text_editor_widget_focus_out_event(GtkWidget *, GdkEventFocus *);
 static void get_style_property_for_path(GtkWidget *, const std::vector<std::string> &, const gchar *, GValue *);
 static PangoLayout *create_layout(AtomTextEditorWidget *, const DisplayLayer::ScreenLine &);
 static PangoLayout *create_layout(AtomTextEditorWidget *, double);
@@ -38,6 +41,8 @@ static void atom_text_editor_widget_handle_released(GtkGestureMultiPress *, gint
 static void atom_text_editor_widget_handle_drag_update(GtkGestureDrag *, gdouble, gdouble, gpointer);
 static void update(AtomTextEditorWidget *, bool = true);
 static void autoscroll(AtomTextEditorWidget *, Range);
+static void start_blinking(AtomTextEditorWidget *);
+static void stop_blinking(AtomTextEditorWidget *);
 static void get_row_and_column(AtomTextEditorWidget *, double, double, int &, int &);
 static void atom_text_editor_widget_move_up(AtomTextEditorWidget *);
 static void atom_text_editor_widget_move_down(AtomTextEditorWidget *);
@@ -277,6 +282,8 @@ typedef struct {
   double ascent;
   double line_height;
   double char_width;
+  bool draw_cursors;
+  guint blink_source_id;
   LayoutCache<AtomTextEditorWidget, Layout> *layout_cache;
   StyleCache *style_cache;
   double gutter_width;
@@ -324,7 +331,7 @@ AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
     update(self);
   });
   priv->text_editor->selectionsMarkerLayer->onDidUpdate([self]() {
-    gtk_widget_queue_draw(GTK_WIDGET(self));
+    start_blinking(self);
   });
   priv->text_editor->onDidRequestAutoscroll([self](Range range) {
     autoscroll(self, range);
@@ -344,6 +351,8 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   GTK_WIDGET_CLASS(klass)->realize = atom_text_editor_widget_realize;
   GTK_WIDGET_CLASS(klass)->unrealize = atom_text_editor_widget_unrealize;
   GTK_WIDGET_CLASS(klass)->size_allocate = atom_text_editor_widget_size_allocate;
+  GTK_WIDGET_CLASS(klass)->focus_in_event = atom_text_editor_widget_focus_in_event;
+  GTK_WIDGET_CLASS(klass)->focus_out_event = atom_text_editor_widget_focus_out_event;
   GTK_WIDGET_CLASS(klass)->draw = atom_text_editor_widget_draw;
   GTK_WIDGET_CLASS(klass)->key_press_event = atom_text_editor_widget_key_press_event;
   GTK_WIDGET_CLASS(klass)->key_release_event = atom_text_editor_widget_key_release_event;
@@ -483,6 +492,8 @@ static void atom_text_editor_widget_init(AtomTextEditorWidget *self) {
   priv->ascent = round(ascent + (priv->line_height - (ascent + descent)) / 2.0);
   priv->char_width = pango_units_to_double(pango_font_metrics_get_approximate_char_width(metrics));
   pango_font_metrics_unref(metrics);
+  priv->draw_cursors = false;
+  priv->blink_source_id = 0;
   priv->layout_cache = new LayoutCache<AtomTextEditorWidget, Layout>();
   priv->style_cache = new StyleCache();
   gtk_widget_set_can_focus(GTK_WIDGET(self), TRUE);
@@ -581,6 +592,7 @@ static void atom_text_editor_widget_realize(GtkWidget *widget) {
   GdkCursor *cursor = gdk_cursor_new_from_name(gdk_window_get_display(priv->text_window), "text");
   gdk_window_set_cursor(priv->text_window, cursor);
   g_object_unref(cursor);
+  gtk_im_context_set_client_window(priv->im_context, priv->text_window);
   //GTK_WIDGET_CLASS(atom_text_editor_widget_parent_class)->realize(widget);
 }
 
@@ -600,6 +612,22 @@ static void atom_text_editor_widget_size_allocate(GtkWidget *widget, GtkAllocati
     gdk_window_move_resize(priv->text_window, allocation->x + priv->gutter_width, allocation->y, allocation->width - priv->gutter_width, allocation->height);
   }
   update(self, false);
+}
+
+static gboolean atom_text_editor_widget_focus_in_event(GtkWidget *widget, GdkEventFocus *event) {
+  AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(widget);
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  gtk_im_context_focus_in(priv->im_context);
+  start_blinking(self);
+  return GDK_EVENT_PROPAGATE;
+}
+
+static gboolean atom_text_editor_widget_focus_out_event(GtkWidget *widget, GdkEventFocus *event) {
+  AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(widget);
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  gtk_im_context_focus_out(priv->im_context);
+  stop_blinking(self);
+  return GDK_EVENT_PROPAGATE;
 }
 
 gboolean atom_text_editor_widget_save(AtomTextEditorWidget *self) {
@@ -913,11 +941,13 @@ static void draw_lines(
   GdkRGBA cursor_color;
   priv->style_cache->get_property(widget, {"cursor"}, "border-left-color", &cursor_color);
   gdk_cairo_set_source_rgba(cr, &cursor_color);
-  for (const auto &cursor : cursors) {
-    double y = cursor.first * priv->line_height;
-    double x = layouts[cursor.first - start_row].index_to_x(cursor.second);
-    cairo_rectangle(cr, x, y, 2, priv->line_height);
-    cairo_fill(cr);
+  if (priv->draw_cursors) {
+    for (const auto &cursor : cursors) {
+      double y = cursor.first * priv->line_height;
+      double x = layouts[cursor.first - start_row].index_to_x(cursor.second);
+      cairo_rectangle(cr, x, y, 2, priv->line_height);
+      cairo_fill(cr);
+    }
   }
 }
 
@@ -1124,6 +1154,33 @@ static void autoscroll(AtomTextEditorWidget *self, Range range) {
   if (gtk_adjustment_get_value(priv->vadjustment) < min_value) {
     gtk_adjustment_set_value(priv->vadjustment, min_value);
   }
+}
+
+static gboolean blink_callback(gpointer user_data) {
+  AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(user_data);
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  priv->draw_cursors = !priv->draw_cursors;
+  gtk_widget_queue_draw(GTK_WIDGET(self));
+  return G_SOURCE_CONTINUE;
+}
+
+static void start_blinking(AtomTextEditorWidget *self) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  if (priv->blink_source_id) {
+    g_source_remove(priv->blink_source_id);
+  }
+  priv->draw_cursors = true;
+  gtk_widget_queue_draw(GTK_WIDGET(self));
+  priv->blink_source_id = g_timeout_add(CURSOR_BLINK_PERIOD / 2, blink_callback, self);
+}
+
+static void stop_blinking(AtomTextEditorWidget *self) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  if (priv->blink_source_id) {
+    g_source_remove(priv->blink_source_id);
+  }
+  priv->draw_cursors = false;
+  gtk_widget_queue_draw(GTK_WIDGET(self));
 }
 
 static void get_row_and_column(AtomTextEditorWidget *self, double x, double y, int &row, int &column) {
