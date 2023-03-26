@@ -14,11 +14,30 @@
   @return mix(mix(hsl($hue, 100%, 50%), white, $saturation), black, $value);
 }
 
+@function pow24($x) {
+  // compute pow(x, 2.4) using Newton's method
+  $y: 1;
+  $z: 1 - $x * $x;
+  @while $z > 1e-10 {
+    $d: 5 * $y * $y * $y * $y;
+    $y: $y - $z / $d;
+    $z: $y * $y * $y * $y * $y - $x * $x;
+  }
+  @return $x * $x * $y;
+}
+
+@function to-linear($component) {
+  @if $component <= 0.03928 {
+    @return $component / 12.92;
+  } @else {
+    @return pow24(($component + 0.055) / 1.055);
+  }
+}
+
 @function luma($color) {
-  // TODO: gamma correction
-  $R: red($color) / 255;
-  $G: green($color) / 255;
-  $B: blue($color) / 255;
+  $R: to-linear(red($color) / 255);
+  $G: to-linear(green($color) / 255);
+  $B: to-linear(blue($color) / 255);
   @return (0.2126 * $R + 0.7152 * $G + 0.0722 * $B) * 100%;
 }
 
