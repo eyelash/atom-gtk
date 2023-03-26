@@ -6,6 +6,7 @@
 #include <display-marker.h>
 #include <decoration-manager.h>
 #include <selection.h>
+#include <bracket-matcher.h>
 #include <select-next.h>
 
 extern "C" TreeSitterGrammar *atom_language_c();
@@ -269,6 +270,7 @@ static int count_digits(int n) {
 typedef struct {
   GtkWidget parent_instance;
   TextEditor *text_editor;
+  BracketMatcher *bracket_matcher;
   SelectNext *select_next;
   GtkAdjustment *hadjustment;
   GtkAdjustment *vadjustment;
@@ -326,6 +328,7 @@ AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
   }
   grammar_registry->autoAssignLanguageMode(buffer);
   priv->text_editor = new TextEditor(buffer);
+  priv->bracket_matcher = new BracketMatcher(priv->text_editor);
   priv->select_next = new SelectNext(priv->text_editor);
   priv->text_editor->onDidChange([self]() {
     update(self);
@@ -514,6 +517,7 @@ static void atom_text_editor_widget_finalize(GObject *object) {
   g_object_unref(priv->multipress_gesture);
   g_object_unref(priv->im_context);
   delete priv->select_next;
+  delete priv->bracket_matcher;
   delete priv->text_editor;
   G_OBJECT_CLASS(atom_text_editor_widget_parent_class)->finalize(object);
 }
@@ -1020,7 +1024,7 @@ static void atom_text_editor_widget_commit(GtkIMContext *im_context, gchar *text
   AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(user_data);
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   gunichar2 *utf16 = g_utf8_to_utf16(text, -1, NULL, NULL, NULL);
-  priv->text_editor->insertText((const char16_t *)utf16, true);
+  priv->bracket_matcher->insertText((const char16_t *)utf16, true);
   g_free(utf16);
 }
 
@@ -1339,7 +1343,7 @@ static void atom_text_editor_widget_select_next(AtomTextEditorWidget *self) {
 }
 
 static void atom_text_editor_widget_insert_newline(AtomTextEditorWidget *self) {
-  GET_PRIVATE(self)->text_editor->insertNewline();
+  GET_PRIVATE(self)->bracket_matcher->insertNewline();
 }
 
 static void atom_text_editor_widget_insert_newline_above(AtomTextEditorWidget *self) {
@@ -1353,7 +1357,7 @@ static void atom_text_editor_widget_insert_newline_below(AtomTextEditorWidget *s
 static void atom_text_editor_widget_backspace(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   priv->text_editor->transact(priv->text_editor->getUndoGroupingInterval(), [&]() {
-    priv->text_editor->backspace();
+    priv->bracket_matcher->backspace();
   });
 }
 
