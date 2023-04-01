@@ -504,6 +504,11 @@ static void atom_text_editor_widget_init(AtomTextEditorWidget *self) {
 }
 
 static void atom_text_editor_widget_dispose(GObject *object) {
+  AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(object);
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  g_clear_object(&priv->drag_gesture);
+  g_clear_object(&priv->multipress_gesture);
+  g_clear_object(&priv->im_context);
   G_OBJECT_CLASS(atom_text_editor_widget_parent_class)->dispose(object);
 }
 
@@ -513,9 +518,6 @@ static void atom_text_editor_widget_finalize(GObject *object) {
   delete priv->style_cache;
   delete priv->layout_cache;
   pango_font_description_free(priv->font_description);
-  g_object_unref(priv->drag_gesture);
-  g_object_unref(priv->multipress_gesture);
-  g_object_unref(priv->im_context);
   delete priv->select_next;
   delete priv->bracket_matcher;
   delete priv->text_editor;
@@ -681,7 +683,7 @@ static void get_style_property_for_path(GtkWidget *widget, const std::vector<std
 static void emit_attributes(StyleCache *style_cache, GtkWidget *widget, gchar *utf8, PangoAttrList *attrs, int32_t index, int32_t &last_index, const std::vector<std::string> &classes) {
   if (index == last_index) return;
 
-  if (classes.size() > 1) {
+  if (classes.size() > 0) {
     PangoStyle font_style;
     style_cache->get_property(widget, classes, "font-style", &font_style);
     PangoAttribute *attr = pango_attr_style_new(font_style);
@@ -723,6 +725,7 @@ static PangoLayout *create_layout(AtomTextEditorWidget *self, const DisplayLayer
   int32_t index = 0;
   int32_t last_index = 0;
   std::vector<std::string> classes;
+  classes.push_back("line");
   for (int32_t tag : screen_line.tags) {
     if (display_layer->isOpenTag(tag)) {
       emit_attributes(priv->style_cache, GTK_WIDGET(self), utf8, attrs, index, last_index, classes);
@@ -900,6 +903,7 @@ static void draw_lines(
     const char *class_ = highlight.second;
     GdkRGBA highlight_color;
     std::vector<std::string> path;
+    path.push_back("highlights");
     path.push_back(std::string("highlight ") + class_);
     path.push_back(std::string("region ") + class_);
     priv->style_cache->get_property(widget, path, "background-color", &highlight_color);
@@ -982,7 +986,6 @@ static gboolean atom_text_editor_widget_draw(GtkWidget *widget, cairo_t *cr) {
   std::vector<Layout> layouts = priv->layout_cache->get_layouts(self, screen_lines);
 
   const double padding = round(priv->char_width);
-  const double gutter_width = padding * 4 + round(count_digits(priv->text_editor->getScreenLineCount()) * priv->char_width);
 
   GdkRGBA background_color;
   priv->style_cache->get_property(widget, {}, "background-color", &background_color);
@@ -991,11 +994,11 @@ static gboolean atom_text_editor_widget_draw(GtkWidget *widget, cairo_t *cr) {
 
   cairo_save(cr);
   cairo_translate(cr, 0, -vadjustment);
-  draw_gutter(widget, cr, padding, gutter_width, start_row, end_row, gutter_classes);
+  draw_gutter(widget, cr, padding, priv->gutter_width, start_row, end_row, gutter_classes);
   cairo_restore(cr);
   cairo_save(cr);
-  cairo_translate(cr, gutter_width, -vadjustment);
-  draw_lines(widget, cr, allocated_width - gutter_width, start_row, end_row, line_classes, highlights, cursors, layouts);
+  cairo_translate(cr, priv->gutter_width, -vadjustment);
+  draw_lines(widget, cr, allocated_width - priv->gutter_width, start_row, end_row, line_classes, highlights, cursors, layouts);
   cairo_restore(cr);
 
   priv->layout_cache->collect_garbage();
@@ -1182,6 +1185,7 @@ static void stop_blinking(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   if (priv->blink_source_id) {
     g_source_remove(priv->blink_source_id);
+    priv->blink_source_id = 0;
   }
   priv->draw_cursors = false;
   gtk_widget_queue_draw(GTK_WIDGET(self));

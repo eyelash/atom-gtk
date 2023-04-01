@@ -296,7 +296,6 @@ $tab-background-color-active:      $level-2-color;
 $tab-border-color:                 $base-border-color;
 
 window {
-
   headerbar.titlebar {
     background-color: $app-background-color;
     background-image: none;
@@ -309,6 +308,7 @@ window {
       outline: none;
       color: $text-color;
       border: 1px solid $button-border-color;
+      -gtk-icon-shadow: none;
       transition-duration: 0;
       &.titlebutton:not(:hover) {
         background-color: transparent;
@@ -361,6 +361,7 @@ window {
       font-weight: normal;
       border-left: 1px solid $tab-border-color;
       box-shadow: none;
+      outline: none;
       &:checked {
         color: $tab-text-color-active;
         background-color: $tab-background-color-active;
@@ -408,5 +409,4 @@ window {
       padding: 0 0.75em;
     }
   }
-
 }
