@@ -11,8 +11,10 @@
 
 extern "C" TreeSitterGrammar *atom_language_c();
 extern "C" TreeSitterGrammar *atom_language_cpp();
+extern "C" TreeSitterGrammar *atom_language_go();
 extern "C" TreeSitterGrammar *atom_language_javascript();
 extern "C" TreeSitterGrammar *atom_language_python();
+extern "C" TreeSitterGrammar *atom_language_rust();
 
 #if !GLIB_CHECK_VERSION(2, 73, 2)
 #define G_CONNECT_DEFAULT ((GConnectFlags)0)
@@ -304,6 +306,7 @@ typedef enum {
   PROP_VADJUSTMENT,
   PROP_HSCROLL_POLICY,
   PROP_VSCROLL_POLICY,
+  PROP_TITLE,
   N_PROPERTIES
 } AtomTextEditorWidgetProperty;
 
@@ -323,8 +326,10 @@ AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
     grammar_registry = new GrammarRegistry();
     grammar_registry->addGrammar(atom_language_c());
     grammar_registry->addGrammar(atom_language_cpp());
+    grammar_registry->addGrammar(atom_language_go());
     grammar_registry->addGrammar(atom_language_javascript());
     grammar_registry->addGrammar(atom_language_python());
+    grammar_registry->addGrammar(atom_language_rust());
   }
   grammar_registry->autoAssignLanguageMode(buffer);
   priv->text_editor = new TextEditor(buffer);
@@ -338,6 +343,12 @@ AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
   });
   priv->text_editor->onDidRequestAutoscroll([self](Range range) {
     autoscroll(self, range);
+  });
+  priv->text_editor->onDidChangeTitle([self]() {
+    g_object_notify(G_OBJECT(self), "title");
+  });
+  priv->text_editor->onDidChangeModified([self]() {
+    g_object_notify(G_OBJECT(self), "title");
   });
   const double padding = round(priv->char_width);
   priv->gutter_width = padding * 4 + round(count_digits(priv->text_editor->getScreenLineCount()) * priv->char_width);
@@ -465,6 +476,7 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   g_object_class_override_property(G_OBJECT_CLASS(klass), PROP_VADJUSTMENT, "vadjustment");
   g_object_class_override_property(G_OBJECT_CLASS(klass), PROP_HSCROLL_POLICY, "hscroll-policy");
   g_object_class_override_property(G_OBJECT_CLASS(klass), PROP_VSCROLL_POLICY, "vscroll-policy");
+  g_object_class_install_property(G_OBJECT_CLASS(klass), PROP_TITLE, g_param_spec_string("title", NULL, NULL, NULL, (GParamFlags)(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
   gtk_widget_class_set_css_name(GTK_WIDGET_CLASS(klass), "atom-text-editor");
 }
 
@@ -567,6 +579,9 @@ static void atom_text_editor_widget_get_property(GObject *object, guint property
   case PROP_VSCROLL_POLICY:
     g_value_set_enum(value, priv->vscroll_policy);
     break;
+  case PROP_TITLE:
+    g_value_take_string(value, atom_text_editor_widget_get_title(self));
+    break;
   default:
     break;
   }
@@ -634,6 +649,15 @@ static gboolean atom_text_editor_widget_focus_out_event(GtkWidget *widget, GdkEv
   gtk_im_context_focus_out(priv->im_context);
   stop_blinking(self);
   return GDK_EVENT_PROPAGATE;
+}
+
+gchar *atom_text_editor_widget_get_title(AtomTextEditorWidget *self) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  std::string title = priv->text_editor->getTitle();
+  if (priv->text_editor->isModified()) {
+    title += u8" \u25CF";
+  }
+  return g_strdup(title.c_str());
 }
 
 gboolean atom_text_editor_widget_save(AtomTextEditorWidget *self) {

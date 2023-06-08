@@ -27,6 +27,7 @@ class Window : Gtk.ApplicationWindow {
     var status_bar = new Gtk.Statusbar();
     status_bar.margin = 0;
     status_bar.pack_end(new Gtk.Label("UTF-8"), false);
+    text_editor_widget.bind_property("title", header_bar, "subtitle", BindingFlags.SYNC_CREATE);
     box.pack_start(status_bar, false);
     add(box);
   }
