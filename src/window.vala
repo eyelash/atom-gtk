@@ -5,16 +5,26 @@ class Window : Gtk.ApplicationWindow {
   public Window(Gtk.Application application, File? file = null) {
     Object(application: application);
 
+    var open_action = new SimpleAction("open", null);
+    open_action.activate.connect(open);
+    add_action(open_action);
+    var save_action = new SimpleAction("save", null);
+    save_action.activate.connect(save);
+    add_action(save_action);
+    var save_as_action = new SimpleAction("save-as", null);
+    save_as_action.activate.connect(save_as);
+    add_action(save_as_action);
+
     var header_bar = new Gtk.HeaderBar();
     header_bar.show_close_button = true;
     header_bar.title = "Atom";
     var open_button = new Gtk.Button.from_icon_name("document-open-symbolic", Gtk.IconSize.BUTTON);
     open_button.tooltip_text = "Open File";
-    open_button.clicked.connect(open);
+    open_button.action_name = "win.open";
     header_bar.pack_start(open_button);
     var save_button = new Gtk.Button.from_icon_name("document-save-symbolic", Gtk.IconSize.BUTTON);
     save_button.tooltip_text = "Save";
-    save_button.clicked.connect(save);
+    save_button.action_name = "win.save";
     header_bar.pack_start(save_button);
     set_titlebar(header_bar);
 
@@ -50,15 +60,19 @@ class Window : Gtk.ApplicationWindow {
 
   private void save() {
     if (!text_editor_widget.save()) {
-      dialog = new Gtk.FileChooserNative(null, this, Gtk.FileChooserAction.SAVE, null, null);
-      dialog.do_overwrite_confirmation = true;
-      dialog.response.connect((response) => {
-        if (response == Gtk.ResponseType.ACCEPT) {
-          text_editor_widget.save_as(dialog.get_file());
-        }
-        dialog.destroy();
-      });
-      dialog.show();
+      save_as();
     }
+  }
+
+  private void save_as() {
+    dialog = new Gtk.FileChooserNative(null, this, Gtk.FileChooserAction.SAVE, null, null);
+    dialog.do_overwrite_confirmation = true;
+    dialog.response.connect((response) => {
+      if (response == Gtk.ResponseType.ACCEPT) {
+        text_editor_widget.save_as(dialog.get_file());
+      }
+      dialog.destroy();
+    });
+    dialog.show();
   }
 }

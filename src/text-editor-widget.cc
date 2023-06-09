@@ -357,6 +357,15 @@ AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
 
 #define ADD_SIGNAL(name, vfunc) g_signal_new(name, ATOM_TYPE_TEXT_EDITOR_WIDGET, (GSignalFlags)(G_SIGNAL_RUN_LAST | G_SIGNAL_ACTION), G_STRUCT_OFFSET(AtomTextEditorWidgetClass, vfunc), NULL, NULL, NULL, G_TYPE_NONE, 0)
 
+static void set_accels_for_signal(GtkBindingSet *binding_set, const gchar *signal_name, std::initializer_list<const gchar *> accels) {
+  for (const gchar *accelerator : accels) {
+    guint keyval;
+    GdkModifierType modifiers;
+    gtk_accelerator_parse(accelerator, &keyval, &modifiers);
+    gtk_binding_entry_add_signal(binding_set, keyval, modifiers, signal_name, 0);
+  }
+}
+
 static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass) {
   G_OBJECT_CLASS(klass)->dispose = atom_text_editor_widget_dispose;
   G_OBJECT_CLASS(klass)->finalize = atom_text_editor_widget_finalize;
@@ -472,6 +481,58 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   ADD_SIGNAL("move-line-down", move_line_down);
   ADD_SIGNAL("undo", undo);
   ADD_SIGNAL("redo", redo);
+  GtkBindingSet *binding_set = gtk_binding_set_by_class(klass);
+  set_accels_for_signal(binding_set, "move-up", {"Up", "KP_Up"});
+  set_accels_for_signal(binding_set, "move-down", {"Down", "KP_Down"});
+  set_accels_for_signal(binding_set, "move-left", {"Left", "KP_Left"});
+  set_accels_for_signal(binding_set, "move-right", {"Right", "KP_Right"});
+  set_accels_for_signal(binding_set, "move-to-first-character-of-line", {"Home", "KP_Home"});
+  set_accels_for_signal(binding_set, "move-to-end-of-line", {"End", "KP_End"});
+  set_accels_for_signal(binding_set, "move-to-beginning-of-word", {"<Control>Left", "<Control>KP_Left"});
+  set_accels_for_signal(binding_set, "move-to-end-of-word", {"<Control>Right", "<Control>KP_Right"});
+  set_accels_for_signal(binding_set, "move-to-previous-subword-boundary", {"<Alt>Left", "<Alt>KP_Left"});
+  set_accels_for_signal(binding_set, "move-to-next-subword-boundary", {"<Alt>Right", "<Alt>KP_Right"});
+  set_accels_for_signal(binding_set, "page-up", {"Page_Up", "KP_Page_Up"});
+  set_accels_for_signal(binding_set, "page-down", {"Page_Down", "KP_Page_Down"});
+  set_accels_for_signal(binding_set, "move-to-top", {"<Control>Home", "<Control>KP_Home"});
+  set_accels_for_signal(binding_set, "move-to-bottom", {"<Control>End", "<Control>KP_End"});
+  set_accels_for_signal(binding_set, "select-up", {"<Shift>Up", "<Shift>KP_Up"});
+  set_accels_for_signal(binding_set, "select-down", {"<Shift>Down", "<Shift>KP_Down"});
+  set_accels_for_signal(binding_set, "select-left", {"<Shift>Left", "<Shift>KP_Left"});
+  set_accels_for_signal(binding_set, "select-right", {"<Shift>Right", "<Shift>KP_Right"});
+  set_accels_for_signal(binding_set, "select-to-first-character-of-line", {"<Shift>Home", "<Shift>KP_Home"});
+  set_accels_for_signal(binding_set, "select-to-end-of-line", {"<Shift>End", "<Shift>KP_End"});
+  set_accels_for_signal(binding_set, "select-to-beginning-of-word", {"<Control><Shift>Left", "<Control><Shift>KP_Left"});
+  set_accels_for_signal(binding_set, "select-to-end-of-word", {"<Control><Shift>Right", "<Control><Shift>KP_Right"});
+  set_accels_for_signal(binding_set, "select-to-previous-subword-boundary", {"<Alt><Shift>Left", "<Alt><Shift>KP_Left"});
+  set_accels_for_signal(binding_set, "select-to-next-subword-boundary", {"<Alt><Shift>Right", "<Alt><Shift>KP_Right"});
+  set_accels_for_signal(binding_set, "select-page-up", {"<Shift>Page_Up", "<Shift>KP_Page_Up"});
+  set_accels_for_signal(binding_set, "select-page-down", {"<Shift>Page_Down", "<Shift>KP_Page_Down"});
+  set_accels_for_signal(binding_set, "select-to-top", {"<Control><Shift>Home", "<Control><Shift>KP_Home"});
+  set_accels_for_signal(binding_set, "select-to-bottom", {"<Control><Shift>End", "<Control><Shift>KP_End"});
+  set_accels_for_signal(binding_set, "insert-newline", {"Return", "KP_Enter"});
+  set_accels_for_signal(binding_set, "backspace", {"BackSpace"});
+  set_accels_for_signal(binding_set, "delete", {"Delete", "KP_Delete"});
+  set_accels_for_signal(binding_set, "indent", {"Tab"});
+  set_accels_for_signal(binding_set, "insert-newline-below", {"<Control>Return", "<Control>KP_Enter"});
+  set_accels_for_signal(binding_set, "insert-newline-above", {"<Control><Shift>Return", "<Control><Shift>KP_Enter"});
+  set_accels_for_signal(binding_set, "delete-to-beginning-of-word", {"<Control>BackSpace"});
+  set_accels_for_signal(binding_set, "delete-to-end-of-word", {"<Control>Delete", "<Control>KP_Delete"});
+  set_accels_for_signal(binding_set, "delete-to-beginning-of-subword", {"<Alt>BackSpace"});
+  set_accels_for_signal(binding_set, "delete-to-end-of-subword", {"<Alt>Delete", "<Alt>KP_Delete"});
+  set_accels_for_signal(binding_set, "outdent-selected-rows", {"<Shift>Tab"});
+  set_accels_for_signal(binding_set, "move-line-up", {"<Control>Up", "<Control>KP_Up"});
+  set_accels_for_signal(binding_set, "move-line-down", {"<Control>Down", "<Control>KP_Down"});
+  set_accels_for_signal(binding_set, "duplicate-lines", {"<Control><Shift>D"});
+  set_accels_for_signal(binding_set, "delete-line", {"<Control><Shift>K"});
+  set_accels_for_signal(binding_set, "consolidate-selections", {"Escape"});
+  set_accels_for_signal(binding_set, "select-all", {"<Primary>A"});
+  set_accels_for_signal(binding_set, "select-line", {"<Primary>L"});
+  set_accels_for_signal(binding_set, "add-selection-above", {"<Alt><Shift>Up", "<Alt><Shift>KP_Up"});
+  set_accels_for_signal(binding_set, "add-selection-below", {"<Alt><Shift>Down", "<Alt><Shift>KP_Down"});
+  set_accels_for_signal(binding_set, "select-next", {"<Primary>D"});
+  set_accels_for_signal(binding_set, "undo", {"<Primary>Z"});
+  set_accels_for_signal(binding_set, "redo", {"<Primary>Y", "<Primary><Shift>Z"});
   g_object_class_override_property(G_OBJECT_CLASS(klass), PROP_HADJUSTMENT, "hadjustment");
   g_object_class_override_property(G_OBJECT_CLASS(klass), PROP_VADJUSTMENT, "vadjustment");
   g_object_class_override_property(G_OBJECT_CLASS(klass), PROP_HSCROLL_POLICY, "hscroll-policy");

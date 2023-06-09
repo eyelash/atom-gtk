@@ -6,8 +6,10 @@ class Application : Gtk.Application {
   public override void startup() {
     base.startup();
     Gtk.Settings.get_default().gtk_application_prefer_dark_theme = true;
-    load_css("/com/github/eyelash/atom-gtk/key-bindings.css");
     load_css("/com/github/eyelash/atom-gtk/one-dark.css");
+    set_accels_for_action("win.open", {"<Primary>O"});
+    set_accels_for_action("win.save", {"<Primary>S"});
+    set_accels_for_action("win.save-as", {"<Primary><Shift>S"});
   }
 
   public override void activate() {
