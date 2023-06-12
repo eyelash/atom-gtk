@@ -2,7 +2,7 @@ class Window : Gtk.ApplicationWindow {
   private Atom.TextEditorWidget text_editor_widget;
   private Gtk.FileChooserNative dialog;
 
-  public Window(Gtk.Application application, File? file = null) {
+  public Window(Gtk.Application application) {
     Object(application: application);
 
     var open_action = new SimpleAction("open", null);
@@ -29,6 +29,13 @@ class Window : Gtk.ApplicationWindow {
     set_titlebar(header_bar);
 
     set_default_size(750, 500);
+    var notebook = new Gtk.Notebook();
+    notebook.show_border = false;
+    add(notebook);
+  }
+
+  public void append_tab(File? file = null) {
+    var notebook = get_child() as unowned Gtk.Notebook;
     var box = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
     var scrolled_window = new Gtk.ScrolledWindow(null, null);
     text_editor_widget = new Atom.TextEditorWidget(file);
@@ -37,9 +44,46 @@ class Window : Gtk.ApplicationWindow {
     var status_bar = new Gtk.Statusbar();
     status_bar.margin = 0;
     status_bar.pack_end(new Gtk.Label("UTF-8"), false);
-    text_editor_widget.bind_property("title", header_bar, "subtitle", BindingFlags.SYNC_CREATE);
     box.pack_start(status_bar, false);
-    add(box);
+    var label = create_tab_label(text_editor_widget);
+    label.show_all();
+    box.show_all();
+    int index = notebook.append_page(box, label);
+    notebook.set_tab_reorderable(box, true);
+    notebook.child_set_property(box, "tab-expand", true);
+    notebook.set_current_page(index);
+    text_editor_widget.grab_focus();
+  }
+
+  private Gtk.Widget create_tab_label(Atom.TextEditorWidget text_editor_widget) {
+    var box = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 0);
+
+    var label = new Gtk.Label(null);
+    text_editor_widget.bind_property("title", label, "label", BindingFlags.SYNC_CREATE);
+    box.set_center_widget(label);
+
+    var close_button = new Gtk.Button();
+    // use a Gtk.Arrow so that the icon can be set in CSS using -gtk-icon-source
+    var close_image = new Gtk.Arrow(Gtk.ArrowType.DOWN, Gtk.ShadowType.NONE);
+    close_button.add(close_image);
+    close_button.relief = Gtk.ReliefStyle.NONE;
+    close_button.focus_on_click = false;
+    close_button.clicked.connect(() => {
+      var notebook = box.get_parent() as unowned Gtk.Notebook;
+      int index = notebook.page_num(text_editor_widget.get_parent().get_parent());
+      notebook.remove_page(index);
+    });
+    box.pack_end(close_button, false, true);
+
+    text_editor_widget.notify["modified"].connect(() => {
+      if (text_editor_widget.modified) {
+        box.get_style_context().add_class("modified");
+      } else {
+        box.get_style_context().remove_class("modified");
+      }
+    });
+
+    return box;
   }
 
   private void open() {
@@ -48,9 +92,7 @@ class Window : Gtk.ApplicationWindow {
     dialog.response.connect((response) => {
       if (response == Gtk.ResponseType.ACCEPT) {
         foreach (var file in dialog.get_files()) {
-          var window = new Window(application, file);
-          window.show_all();
-          window.present();
+          append_tab(file);
         }
       }
       dialog.destroy();

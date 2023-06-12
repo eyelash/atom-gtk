@@ -10,19 +10,20 @@ class Application : Gtk.Application {
     set_accels_for_action("win.open", {"<Primary>O"});
     set_accels_for_action("win.save", {"<Primary>S"});
     set_accels_for_action("win.save-as", {"<Primary><Shift>S"});
-  }
-
-  public override void activate() {
     var window = new Window(this);
     window.show_all();
     window.present();
   }
 
+  public override void activate() {
+    var window = get_active_window() as unowned Window;
+    window.append_tab();
+  }
+
   public override void open(File[] files, string hint) {
+    var window = get_active_window() as unowned Window;
     foreach (var file in files) {
-      var window = new Window(this, file);
-      window.show_all();
-      window.present();
+      window.append_tab(file);
     }
   }
 

@@ -64,6 +64,7 @@ struct _AtomTextEditorWidgetClass {
 
 AtomTextEditorWidget *atom_text_editor_widget_new(GFile *);
 gchar *atom_text_editor_widget_get_title(AtomTextEditorWidget *);
+gboolean atom_text_editor_widget_get_modified(AtomTextEditorWidget *);
 gboolean atom_text_editor_widget_save(AtomTextEditorWidget *);
 void atom_text_editor_widget_save_as(AtomTextEditorWidget *, GFile *);
 

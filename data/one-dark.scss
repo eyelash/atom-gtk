@@ -367,17 +367,13 @@ window {
         background-color: $tab-background-color-active;
         border-left-color: $accent-color;
         box-shadow: inset 1px 0 $accent-color;
+        &:backdrop {
+          border-left-color: mix($text-color, $tab-background-color-editor, 33%);
+          box-shadow: inset 1px 0 mix($text-color, $tab-background-color-editor, 33%);
+        }
       }
       &:first-child:not(:checked) {
         border-left-color: transparent;
-      }
-      &:last-child {
-        &:not(:checked) {
-          box-shadow: 1px 0 $tab-border-color;
-        }
-        &:checked {
-          box-shadow: inset 1px 0 $accent-color, 1px 0 $tab-border-color;
-        }
       }
       button {
         color: transparent;
@@ -387,6 +383,9 @@ window {
         box-shadow: none;
         outline: none;
         transition-duration: 0;
+        & > * {
+          -gtk-icon-source: -gtk-icontheme('window-close-symbolic');
+        }
       }
       &:hover button {
         color: inherit;
@@ -396,6 +395,20 @@ window {
         }
         &:active {
           background-color: fade($accent-color, 50%);
+        }
+      }
+      .modified button {
+        color: $accent-color;
+        & > * {
+          -gtk-icon-source: -gtk-icontheme('media-record-symbolic');
+        }
+      }
+      &:hover .modified button {
+        & > * {
+          -gtk-icon-source: -gtk-icontheme('window-close-symbolic');
+        }
+        &:hover {
+          color: $tab-text-color-active;
         }
       }
     }

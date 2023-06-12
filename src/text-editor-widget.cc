@@ -307,6 +307,7 @@ typedef enum {
   PROP_HSCROLL_POLICY,
   PROP_VSCROLL_POLICY,
   PROP_TITLE,
+  PROP_MODIFIED,
   N_PROPERTIES
 } AtomTextEditorWidgetProperty;
 
@@ -348,7 +349,7 @@ AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
     g_object_notify(G_OBJECT(self), "title");
   });
   priv->text_editor->onDidChangeModified([self]() {
-    g_object_notify(G_OBJECT(self), "title");
+    g_object_notify(G_OBJECT(self), "modified");
   });
   const double padding = round(priv->char_width);
   priv->gutter_width = padding * 4 + round(count_digits(priv->text_editor->getScreenLineCount()) * priv->char_width);
@@ -538,6 +539,7 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   g_object_class_override_property(G_OBJECT_CLASS(klass), PROP_HSCROLL_POLICY, "hscroll-policy");
   g_object_class_override_property(G_OBJECT_CLASS(klass), PROP_VSCROLL_POLICY, "vscroll-policy");
   g_object_class_install_property(G_OBJECT_CLASS(klass), PROP_TITLE, g_param_spec_string("title", NULL, NULL, NULL, (GParamFlags)(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
+  g_object_class_install_property(G_OBJECT_CLASS(klass), PROP_MODIFIED, g_param_spec_boolean("modified", NULL, NULL, FALSE, (GParamFlags)(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
   gtk_widget_class_set_css_name(GTK_WIDGET_CLASS(klass), "atom-text-editor");
 }
 
@@ -643,6 +645,9 @@ static void atom_text_editor_widget_get_property(GObject *object, guint property
   case PROP_TITLE:
     g_value_take_string(value, atom_text_editor_widget_get_title(self));
     break;
+  case PROP_MODIFIED:
+    g_value_set_boolean(value, atom_text_editor_widget_get_modified(self));
+    break;
   default:
     break;
   }
@@ -714,11 +719,12 @@ static gboolean atom_text_editor_widget_focus_out_event(GtkWidget *widget, GdkEv
 
 gchar *atom_text_editor_widget_get_title(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  std::string title = priv->text_editor->getTitle();
-  if (priv->text_editor->isModified()) {
-    title += u8" \u25CF";
-  }
-  return g_strdup(title.c_str());
+  return g_strdup(priv->text_editor->getTitle().c_str());
+}
+
+gboolean atom_text_editor_widget_get_modified(AtomTextEditorWidget *self) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  return priv->text_editor->isModified();
 }
 
 gboolean atom_text_editor_widget_save(AtomTextEditorWidget *self) {
