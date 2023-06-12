@@ -39,6 +39,8 @@ struct _AtomTextEditorWidgetClass {
   void (*select_to_top)(AtomTextEditorWidget *);
   void (*select_to_bottom)(AtomTextEditorWidget *);
   void (*select_line)(AtomTextEditorWidget *);
+  void (*select_larger_syntax_node)(AtomTextEditorWidget *);
+  void (*select_smaller_syntax_node)(AtomTextEditorWidget *);
   void (*consolidate_selections)(AtomTextEditorWidget *);
   void (*add_selection_above)(AtomTextEditorWidget *);
   void (*add_selection_below)(AtomTextEditorWidget *);

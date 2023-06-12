@@ -77,6 +77,8 @@ static void atom_text_editor_widget_select_page_down(AtomTextEditorWidget *);
 static void atom_text_editor_widget_select_to_top(AtomTextEditorWidget *);
 static void atom_text_editor_widget_select_to_bottom(AtomTextEditorWidget *);
 static void atom_text_editor_widget_select_line(AtomTextEditorWidget *);
+static void atom_text_editor_widget_select_larger_syntax_node(AtomTextEditorWidget *);
+static void atom_text_editor_widget_select_smaller_syntax_node(AtomTextEditorWidget *);
 static void atom_text_editor_widget_consolidate_selections(AtomTextEditorWidget *);
 static void atom_text_editor_widget_add_selection_above(AtomTextEditorWidget *);
 static void atom_text_editor_widget_add_selection_below(AtomTextEditorWidget *);
@@ -410,6 +412,8 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   klass->select_to_top = atom_text_editor_widget_select_to_top;
   klass->select_to_bottom = atom_text_editor_widget_select_to_bottom;
   klass->select_line = atom_text_editor_widget_select_line;
+  klass->select_larger_syntax_node = atom_text_editor_widget_select_larger_syntax_node;
+  klass->select_smaller_syntax_node = atom_text_editor_widget_select_smaller_syntax_node;
   klass->consolidate_selections = atom_text_editor_widget_consolidate_selections;
   klass->add_selection_above = atom_text_editor_widget_add_selection_above;
   klass->add_selection_below = atom_text_editor_widget_add_selection_below;
@@ -461,6 +465,8 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   ADD_SIGNAL("select-to-top", select_to_top);
   ADD_SIGNAL("select-to-bottom", select_to_bottom);
   ADD_SIGNAL("select-line", select_line);
+  ADD_SIGNAL("select-larger-syntax-node", select_larger_syntax_node);
+  ADD_SIGNAL("select-smaller-syntax-node", select_smaller_syntax_node);
   ADD_SIGNAL("consolidate-selections", consolidate_selections);
   ADD_SIGNAL("add-selection-above", add_selection_above);
   ADD_SIGNAL("add-selection-below", add_selection_below);
@@ -511,6 +517,8 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   set_accels_for_signal(binding_set, "select-page-down", {"<Shift>Page_Down", "<Shift>KP_Page_Down"});
   set_accels_for_signal(binding_set, "select-to-top", {"<Control><Shift>Home", "<Control><Shift>KP_Home"});
   set_accels_for_signal(binding_set, "select-to-bottom", {"<Control><Shift>End", "<Control><Shift>KP_End"});
+  set_accels_for_signal(binding_set, "select-larger-syntax-node", {"<Alt>Up", "<Alt>KP_Up"});
+  set_accels_for_signal(binding_set, "select-smaller-syntax-node", {"<Alt>Down", "<Alt>KP_Down"});
   set_accels_for_signal(binding_set, "insert-newline", {"Return", "KP_Enter"});
   set_accels_for_signal(binding_set, "backspace", {"BackSpace"});
   set_accels_for_signal(binding_set, "delete", {"Delete", "KP_Delete"});
@@ -1419,6 +1427,14 @@ static void atom_text_editor_widget_select_to_bottom(AtomTextEditorWidget *self)
 
 static void atom_text_editor_widget_select_line(AtomTextEditorWidget *self) {
   GET_PRIVATE(self)->text_editor->selectLinesContainingCursors();
+}
+
+static void atom_text_editor_widget_select_larger_syntax_node(AtomTextEditorWidget *self) {
+  GET_PRIVATE(self)->text_editor->selectLargerSyntaxNode();
+}
+
+static void atom_text_editor_widget_select_smaller_syntax_node(AtomTextEditorWidget *self) {
+  GET_PRIVATE(self)->text_editor->selectSmallerSyntaxNode();
 }
 
 static void atom_text_editor_widget_consolidate_selections(AtomTextEditorWidget *self) {
