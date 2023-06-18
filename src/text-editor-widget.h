@@ -62,6 +62,9 @@ struct _AtomTextEditorWidgetClass {
   void (*move_line_down)(AtomTextEditorWidget *);
   void (*undo)(AtomTextEditorWidget *);
   void (*redo)(AtomTextEditorWidget *);
+  void (*copy)(AtomTextEditorWidget *);
+  void (*cut)(AtomTextEditorWidget *);
+  void (*paste)(AtomTextEditorWidget *);
 };
 
 AtomTextEditorWidget *atom_text_editor_widget_new(GFile *);

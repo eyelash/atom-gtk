@@ -6,6 +6,7 @@
 #include <display-marker.h>
 #include <decoration-manager.h>
 #include <selection.h>
+#include <clipboard.h>
 #include <bracket-matcher.h>
 #include <select-next.h>
 
@@ -100,6 +101,9 @@ static void atom_text_editor_widget_move_line_up(AtomTextEditorWidget *);
 static void atom_text_editor_widget_move_line_down(AtomTextEditorWidget *);
 static void atom_text_editor_widget_undo(AtomTextEditorWidget *);
 static void atom_text_editor_widget_redo(AtomTextEditorWidget *);
+static void atom_text_editor_widget_copy(AtomTextEditorWidget *);
+static void atom_text_editor_widget_cut(AtomTextEditorWidget *);
+static void atom_text_editor_widget_paste(AtomTextEditorWidget *);
 
 // convert between UTF-8 pointers and UTF-16 offsets
 static const gchar *offset_to_pointer(const gchar *str, glong offset) {
@@ -336,6 +340,9 @@ AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
   }
   grammar_registry->autoAssignLanguageMode(buffer);
   priv->text_editor = new TextEditor(buffer);
+  if (priv->text_editor->clipboard == nullptr) {
+    priv->text_editor->clipboard = new Clipboard();
+  }
   priv->bracket_matcher = new BracketMatcher(priv->text_editor);
   priv->select_next = new SelectNext(priv->text_editor);
   priv->text_editor->onDidChange([self]() {
@@ -435,6 +442,9 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   klass->move_line_down = atom_text_editor_widget_move_line_down;
   klass->undo = atom_text_editor_widget_undo;
   klass->redo = atom_text_editor_widget_redo;
+  klass->copy = atom_text_editor_widget_copy;
+  klass->cut = atom_text_editor_widget_cut;
+  klass->paste = atom_text_editor_widget_paste;
   ADD_SIGNAL("move-up", move_up);
   ADD_SIGNAL("move-down", move_down);
   ADD_SIGNAL("move-left", move_left);
@@ -488,6 +498,9 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   ADD_SIGNAL("move-line-down", move_line_down);
   ADD_SIGNAL("undo", undo);
   ADD_SIGNAL("redo", redo);
+  ADD_SIGNAL("copy", copy);
+  ADD_SIGNAL("cut", cut);
+  ADD_SIGNAL("paste", paste);
   GtkBindingSet *binding_set = gtk_binding_set_by_class(klass);
   set_accels_for_signal(binding_set, "move-up", {"Up", "KP_Up"});
   set_accels_for_signal(binding_set, "move-down", {"Down", "KP_Down"});
@@ -542,6 +555,9 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   set_accels_for_signal(binding_set, "select-next", {"<Primary>D"});
   set_accels_for_signal(binding_set, "undo", {"<Primary>Z"});
   set_accels_for_signal(binding_set, "redo", {"<Primary>Y", "<Primary><Shift>Z"});
+  set_accels_for_signal(binding_set, "copy", {"<Primary>C"});
+  set_accels_for_signal(binding_set, "cut", {"<Primary>X"});
+  set_accels_for_signal(binding_set, "paste", {"<Primary>V"});
   g_object_class_override_property(G_OBJECT_CLASS(klass), PROP_HADJUSTMENT, "hadjustment");
   g_object_class_override_property(G_OBJECT_CLASS(klass), PROP_VADJUSTMENT, "vadjustment");
   g_object_class_override_property(G_OBJECT_CLASS(klass), PROP_HSCROLL_POLICY, "hscroll-policy");
@@ -1525,4 +1541,38 @@ static void atom_text_editor_widget_undo(AtomTextEditorWidget *self) {
 
 static void atom_text_editor_widget_redo(AtomTextEditorWidget *self) {
   GET_PRIVATE(self)->text_editor->redo();
+}
+
+static void atom_text_editor_widget_copy(AtomTextEditorWidget *self) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  priv->text_editor->copySelectedText();
+  const std::u16string &text = priv->text_editor->clipboard->systemText;
+  gchar *utf8 = g_utf16_to_utf8((const gunichar2 *)text.c_str(), text.size(), NULL, NULL, NULL);
+  GtkClipboard *clipboard = gtk_widget_get_clipboard(GTK_WIDGET(self), GDK_SELECTION_CLIPBOARD);
+  gtk_clipboard_set_text(clipboard, utf8, -1);
+  g_free(utf8);
+}
+
+static void atom_text_editor_widget_cut(AtomTextEditorWidget *self) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  priv->text_editor->cutSelectedText();
+  const std::u16string &text = priv->text_editor->clipboard->systemText;
+  gchar *utf8 = g_utf16_to_utf8((const gunichar2 *)text.c_str(), text.size(), NULL, NULL, NULL);
+  GtkClipboard *clipboard = gtk_widget_get_clipboard(GTK_WIDGET(self), GDK_SELECTION_CLIPBOARD);
+  gtk_clipboard_set_text(clipboard, utf8, -1);
+  g_free(utf8);
+}
+
+static void clipboard_text_received(GtkClipboard *clipboard, const gchar *text, gpointer user_data) {
+  AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(user_data);
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  gunichar2 *utf16 = g_utf8_to_utf16(text, -1, NULL, NULL, NULL);
+  priv->text_editor->clipboard->systemText = (const char16_t *)utf16;
+  priv->text_editor->pasteText();
+  g_free(utf16);
+}
+
+static void atom_text_editor_widget_paste(AtomTextEditorWidget *self) {
+  GtkClipboard *clipboard = gtk_widget_get_clipboard(GTK_WIDGET(self), GDK_SELECTION_CLIPBOARD);
+  gtk_clipboard_request_text(clipboard, clipboard_text_received, self);
 }
