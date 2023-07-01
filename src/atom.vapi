@@ -1,6 +1,6 @@
 namespace Atom {
   [CCode(cheader_filename = "text-editor-widget.h")]
-  public class TextEditorWidget : Gtk.DrawingArea {
+  public class TextEditorWidget : Gtk.Widget {
     public string title { owned get; }
     public bool modified { get; }
     public TextEditorWidget(GLib.File? file);

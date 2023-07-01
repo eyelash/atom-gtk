@@ -1,3 +1,5 @@
+namespace Atom {
+
 class Application : Gtk.Application {
   public Application() {
     Object(application_id: "com.github.eyelash.atom-gtk", flags: ApplicationFlags.HANDLES_OPEN);
@@ -16,12 +18,12 @@ class Application : Gtk.Application {
   }
 
   public override void activate() {
-    var window = get_active_window() as unowned Window;
+    var window = get_active_window() as unowned Atom.Window;
     window.append_tab();
   }
 
   public override void open(File[] files, string hint) {
-    var window = get_active_window() as unowned Window;
+    var window = get_active_window() as unowned Atom.Window;
     foreach (var file in files) {
       window.append_tab(file);
     }
@@ -36,4 +38,6 @@ class Application : Gtk.Application {
   public static int main(string[] args) {
     return new Application().run(args);
   }
+}
+
 }
