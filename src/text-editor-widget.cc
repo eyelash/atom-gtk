@@ -47,7 +47,7 @@ static void update(AtomTextEditorWidget *, bool = true);
 static void autoscroll(AtomTextEditorWidget *, Range);
 static void start_blinking(AtomTextEditorWidget *);
 static void stop_blinking(AtomTextEditorWidget *);
-static void get_row_and_column(AtomTextEditorWidget *, double, double, int &, int &);
+static Point get_screen_position(AtomTextEditorWidget *, double, double);
 static void atom_text_editor_widget_move_up(AtomTextEditorWidget *);
 static void atom_text_editor_widget_move_down(AtomTextEditorWidget *);
 static void atom_text_editor_widget_move_left(AtomTextEditorWidget *);
@@ -348,6 +348,15 @@ AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
   priv->text_editor->onDidChange([self]() {
     update(self);
   });
+  priv->text_editor->onDidChangeSelectionRange([self]() {
+    const std::u16string selected_text = GET_PRIVATE(self)->text_editor->getSelectedText();
+    if (!selected_text.empty()) {
+      gchar *utf8 = g_utf16_to_utf8((const gunichar2 *)selected_text.c_str(), selected_text.size(), NULL, NULL, NULL);
+      GtkClipboard *clipboard = gtk_widget_get_clipboard(GTK_WIDGET(self), GDK_SELECTION_PRIMARY);
+      gtk_clipboard_set_text(clipboard, utf8, -1);
+      g_free(utf8);
+    }
+  });
   priv->text_editor->selectionsMarkerLayer->onDidUpdate([self]() {
     start_blinking(self);
   });
@@ -574,6 +583,7 @@ static void atom_text_editor_widget_init(AtomTextEditorWidget *self) {
   priv->im_context = gtk_im_multicontext_new();
   g_signal_connect_object(priv->im_context, "commit", G_CALLBACK(atom_text_editor_widget_commit), self, G_CONNECT_DEFAULT);
   priv->multipress_gesture = gtk_gesture_multi_press_new(GTK_WIDGET(self));
+  gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(priv->multipress_gesture), 0);
   g_signal_connect_object(priv->multipress_gesture, "pressed", G_CALLBACK(atom_text_editor_widget_handle_pressed), self, G_CONNECT_DEFAULT);
   g_signal_connect_object(priv->multipress_gesture, "released", G_CALLBACK(atom_text_editor_widget_handle_released), self, G_CONNECT_DEFAULT);
   priv->drag_gesture = gtk_gesture_drag_new(GTK_WIDGET(self));
@@ -1152,12 +1162,14 @@ static void atom_text_editor_widget_handle_pressed(GtkGestureMultiPress *multipr
   const double vadjustment = gtk_adjustment_get_value(priv->vadjustment);
   gtk_widget_grab_focus(GTK_WIDGET(self));
   GdkEventSequence *sequence = gtk_gesture_single_get_current_sequence(GTK_GESTURE_SINGLE(multipress_gesture));
+  guint button = gtk_gesture_single_get_current_button(GTK_GESTURE_SINGLE(multipress_gesture));
   const GdkEvent *event = gtk_gesture_get_last_event(GTK_GESTURE(multipress_gesture), sequence);
   GdkModifierType state;
   gdk_event_get_state(event, &state);
   const bool modify_selection = state & gtk_widget_get_modifier_mask(GTK_WIDGET(self), GDK_MODIFIER_INTENT_MODIFY_SELECTION);
   const bool extend_selection = state & gtk_widget_get_modifier_mask(GTK_WIDGET(self), GDK_MODIFIER_INTENT_EXTEND_SELECTION);
   if (x < priv->gutter_width) {
+    if (button != GDK_BUTTON_PRIMARY) return;
     const double row = MAX((y + vadjustment) / priv->line_height, 0.0);
     const double start_buffer_row = priv->text_editor->bufferPositionForScreenPosition({row, 0}).row;
     const double end_buffer_row = priv->text_editor->bufferPositionForScreenPosition({row, INFINITY}).row;
@@ -1178,34 +1190,46 @@ static void atom_text_editor_widget_handle_pressed(GtkGestureMultiPress *multipr
     }
     priv->initial_screen_range = priv->text_editor->screenRangeForBufferRange(initial_buffer_range);
   } else {
-    int row, column;
-    get_row_and_column(self, x, y, row, column);
+    const Point screen_position = get_screen_position(self, x, y);
+    if (button == GDK_BUTTON_MIDDLE) {
+      priv->text_editor->setCursorScreenPosition(screen_position);
+      GtkClipboard *clipboard = gtk_widget_get_clipboard(GTK_WIDGET(self), GDK_SELECTION_PRIMARY);
+      gtk_clipboard_request_text(clipboard, [](GtkClipboard *clipboard, const gchar *text, gpointer user_data) {
+        AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(user_data);
+        AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+        gunichar2 *utf16 = g_utf8_to_utf16(text, -1, NULL, NULL, NULL);
+        priv->text_editor->insertText((const char16_t *)utf16);
+        g_free(utf16);
+      }, self);
+      return;
+    }
+    if (button != GDK_BUTTON_PRIMARY) return;
     switch (n_press) {
     case 1:
       if (modify_selection) {
-        Selection *selection = priv->text_editor->getSelectionAtScreenPosition(Point(row, column));
+        Selection *selection = priv->text_editor->getSelectionAtScreenPosition(screen_position);
         if (selection) {
           if (priv->text_editor->hasMultipleCursors()) selection->destroy();
         } else {
-          priv->text_editor->addCursorAtScreenPosition(Point(row, column));
+          priv->text_editor->addCursorAtScreenPosition(screen_position);
         }
       } else {
         if (extend_selection) {
-          priv->text_editor->selectToScreenPosition(Point(row, column));
+          priv->text_editor->selectToScreenPosition(screen_position);
         } else {
-          priv->text_editor->setCursorScreenPosition(Point(row, column));
+          priv->text_editor->setCursorScreenPosition(screen_position);
         }
       }
       break;
     case 2:
       if (modify_selection) {
-        priv->text_editor->addCursorAtScreenPosition(Point(row, column));
+        priv->text_editor->addCursorAtScreenPosition(screen_position);
       }
       priv->text_editor->getLastSelection()->selectWord();
       break;
     case 3:
       if (modify_selection) {
-        priv->text_editor->addCursorAtScreenPosition(Point(row, column));
+        priv->text_editor->addCursorAtScreenPosition(screen_position);
       }
       priv->text_editor->getLastSelection()->selectLine();
       break;
@@ -1234,9 +1258,8 @@ static void atom_text_editor_widget_handle_drag_update(GtkGestureDrag *drag_gest
     const bool reversed = row < priv->initial_screen_range.start.row;
     priv->text_editor->getLastSelection()->setScreenRange(dragged_line_screen_range.union_(priv->initial_screen_range), reversed);
   } else {
-    int row, column;
-    get_row_and_column(self, start_x + offset_x, start_y + offset_y, row, column);
-    priv->text_editor->selectToScreenPosition(Point(row, column), true);
+    const Point screen_position = get_screen_position(self, start_x + offset_x, start_y + offset_y);
+    priv->text_editor->selectToScreenPosition(screen_position, true);
   }
   gtk_widget_queue_draw(GTK_WIDGET(self));
 }
@@ -1306,16 +1329,18 @@ static void stop_blinking(AtomTextEditorWidget *self) {
   gtk_widget_queue_draw(GTK_WIDGET(self));
 }
 
-static void get_row_and_column(AtomTextEditorWidget *self, double x, double y, int &row, int &column) {
+static Point get_screen_position(AtomTextEditorWidget *self, double x, double y) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   const double vadjustment = gtk_adjustment_get_value(priv->vadjustment);
-  row = MAX((y + vadjustment) / priv->line_height, 0.0);
+  const double row = std::max(std::floor((y + vadjustment) / priv->line_height), 0.0);
+  double column;
   if (row < priv->text_editor->getScreenLineCount()) {
     Layout layout = priv->layout_cache->get_layout(self, priv->text_editor->displayLayer->getScreenLine(row));
     column = layout.x_to_index(x - priv->gutter_width);
   } else {
     column = 0;
   }
+  return Point(row, column);
 }
 
 static double get_rows_per_page(AtomTextEditorWidget *self) {
@@ -1563,16 +1588,14 @@ static void atom_text_editor_widget_cut(AtomTextEditorWidget *self) {
   g_free(utf8);
 }
 
-static void clipboard_text_received(GtkClipboard *clipboard, const gchar *text, gpointer user_data) {
-  AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(user_data);
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  gunichar2 *utf16 = g_utf8_to_utf16(text, -1, NULL, NULL, NULL);
-  priv->text_editor->clipboard->systemText = (const char16_t *)utf16;
-  priv->text_editor->pasteText();
-  g_free(utf16);
-}
-
 static void atom_text_editor_widget_paste(AtomTextEditorWidget *self) {
   GtkClipboard *clipboard = gtk_widget_get_clipboard(GTK_WIDGET(self), GDK_SELECTION_CLIPBOARD);
-  gtk_clipboard_request_text(clipboard, clipboard_text_received, self);
+  gtk_clipboard_request_text(clipboard, [](GtkClipboard *clipboard, const gchar *text, gpointer user_data) {
+    AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(user_data);
+    AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+    gunichar2 *utf16 = g_utf8_to_utf16(text, -1, NULL, NULL, NULL);
+    priv->text_editor->clipboard->systemText = (const char16_t *)utf16;
+    priv->text_editor->pasteText();
+    g_free(utf16);
+  }, self);
 }
