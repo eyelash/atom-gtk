@@ -307,7 +307,7 @@ window {
       box-shadow: none;
       outline: none;
       color: $text-color;
-      border: 1px solid $button-border-color;
+      border-color: $button-border-color;
       -gtk-icon-shadow: none;
       transition-duration: 0;
       &.titlebutton:not(:hover) {

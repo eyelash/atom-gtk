@@ -9,6 +9,7 @@ class Application : Gtk.Application {
     base.startup();
     Gtk.Settings.get_default().gtk_application_prefer_dark_theme = true;
     load_css("/com/github/eyelash/atom-gtk/one-dark.css");
+    set_accels_for_action("win.new-file", {"<Primary>N"});
     set_accels_for_action("win.open", {"<Primary>O"});
     set_accels_for_action("win.save", {"<Primary>S"});
     set_accels_for_action("win.save-as", {"<Primary><Shift>S"});
