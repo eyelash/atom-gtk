@@ -1156,6 +1156,40 @@ static void atom_text_editor_widget_commit(GtkIMContext *im_context, gchar *text
   g_free(utf16);
 }
 
+template <void (*F)(AtomTextEditorWidget *)> static void menu_item_callback(GtkMenuItem *self, gpointer user_data) {
+  F(ATOM_TEXT_EDITOR_WIDGET(user_data));
+}
+
+static void show_context_menu(AtomTextEditorWidget *self, const GdkEvent *event) {
+  GtkWidget *menu = gtk_menu_new();
+  gtk_menu_attach_to_widget(GTK_MENU(menu), GTK_WIDGET(self), NULL);
+  GtkWidget *item = gtk_menu_item_new_with_label("Undo");
+  g_signal_connect_object(item, "activate", G_CALLBACK(menu_item_callback<atom_text_editor_widget_undo>), self, G_CONNECT_DEFAULT);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+  item = gtk_menu_item_new_with_label("Redo");
+  g_signal_connect_object(item, "activate", G_CALLBACK(menu_item_callback<atom_text_editor_widget_redo>), self, G_CONNECT_DEFAULT);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+  item = gtk_separator_menu_item_new();
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+  item = gtk_menu_item_new_with_label("Cut");
+  g_signal_connect_object(item, "activate", G_CALLBACK(menu_item_callback<atom_text_editor_widget_cut>), self, G_CONNECT_DEFAULT);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+  item = gtk_menu_item_new_with_label("Copy");
+  g_signal_connect_object(item, "activate", G_CALLBACK(menu_item_callback<atom_text_editor_widget_copy>), self, G_CONNECT_DEFAULT);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+  item = gtk_menu_item_new_with_label("Paste");
+  g_signal_connect_object(item, "activate", G_CALLBACK(menu_item_callback<atom_text_editor_widget_paste>), self, G_CONNECT_DEFAULT);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+  item = gtk_menu_item_new_with_label("Delete");
+  g_signal_connect_object(item, "activate", G_CALLBACK(menu_item_callback<atom_text_editor_widget_delete>), self, G_CONNECT_DEFAULT);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+  item = gtk_menu_item_new_with_label("Select All");
+  g_signal_connect_object(item, "activate", G_CALLBACK(menu_item_callback<atom_text_editor_widget_select_all>), self, G_CONNECT_DEFAULT);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+  gtk_widget_show_all(menu);
+  gtk_menu_popup_at_pointer(GTK_MENU(menu), event);
+}
+
 static void atom_text_editor_widget_handle_pressed(GtkGestureMultiPress *multipress_gesture, gint n_press, gdouble x, gdouble y, gpointer user_data) {
   AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(user_data);
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
@@ -1168,6 +1202,10 @@ static void atom_text_editor_widget_handle_pressed(GtkGestureMultiPress *multipr
   gdk_event_get_state(event, &state);
   const bool modify_selection = state & gtk_widget_get_modifier_mask(GTK_WIDGET(self), GDK_MODIFIER_INTENT_MODIFY_SELECTION);
   const bool extend_selection = state & gtk_widget_get_modifier_mask(GTK_WIDGET(self), GDK_MODIFIER_INTENT_EXTEND_SELECTION);
+  if (gdk_event_triggers_context_menu(event)) {
+    show_context_menu(self, event);
+    return;
+  }
   if (x < priv->gutter_width) {
     if (button != GDK_BUTTON_PRIMARY) return;
     const double row = MAX((y + vadjustment) / priv->line_height, 0.0);
