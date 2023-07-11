@@ -314,6 +314,7 @@ typedef enum {
   PROP_VSCROLL_POLICY,
   PROP_TITLE,
   PROP_MODIFIED,
+  PROP_CURSOR_POSITION,
   N_PROPERTIES
 } AtomTextEditorWidgetProperty;
 
@@ -358,6 +359,7 @@ AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
     }
   });
   priv->text_editor->selectionsMarkerLayer->onDidUpdate([self]() {
+    g_object_notify(G_OBJECT(self), "cursor-position");
     start_blinking(self);
   });
   priv->text_editor->onDidRequestAutoscroll([self](Range range) {
@@ -573,6 +575,7 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   g_object_class_override_property(G_OBJECT_CLASS(klass), PROP_VSCROLL_POLICY, "vscroll-policy");
   g_object_class_install_property(G_OBJECT_CLASS(klass), PROP_TITLE, g_param_spec_string("title", NULL, NULL, NULL, (GParamFlags)(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
   g_object_class_install_property(G_OBJECT_CLASS(klass), PROP_MODIFIED, g_param_spec_boolean("modified", NULL, NULL, FALSE, (GParamFlags)(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
+  g_object_class_install_property(G_OBJECT_CLASS(klass), PROP_CURSOR_POSITION, g_param_spec_string("cursor-position", NULL, NULL, NULL, (GParamFlags)(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
   gtk_widget_class_set_css_name(GTK_WIDGET_CLASS(klass), "atom-text-editor");
 }
 
@@ -682,6 +685,9 @@ static void atom_text_editor_widget_get_property(GObject *object, guint property
   case PROP_MODIFIED:
     g_value_set_boolean(value, atom_text_editor_widget_get_modified(self));
     break;
+  case PROP_CURSOR_POSITION:
+    g_value_take_string(value, atom_text_editor_widget_get_cursor_position(self));
+    break;
   default:
     break;
   }
@@ -759,6 +765,14 @@ gchar *atom_text_editor_widget_get_title(AtomTextEditorWidget *self) {
 gboolean atom_text_editor_widget_get_modified(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   return priv->text_editor->isModified();
+}
+
+gchar *atom_text_editor_widget_get_cursor_position(AtomTextEditorWidget *self) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  Point position = priv->text_editor->getCursorBufferPosition();
+  double row = position.row + 1;
+  double column = position.column + 1;
+  return g_strdup_printf("%.0f:%.0f", row, column);
 }
 
 gboolean atom_text_editor_widget_save(AtomTextEditorWidget *self) {

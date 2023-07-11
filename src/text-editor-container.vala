@@ -12,6 +12,10 @@ class TextEditorContainer : Gtk.Box {
     pack_start(scrolled_window, true);
     var status_bar = new Gtk.Statusbar();
     status_bar.margin = 0;
+    var cursor_position_label = new Gtk.Label(null);
+    text_editor_widget.bind_property("cursor-position", cursor_position_label, "label", BindingFlags.SYNC_CREATE);
+    status_bar.pack_start(cursor_position_label, false);
+    status_bar.reorder_child(cursor_position_label, 0);
     status_bar.pack_end(new Gtk.Label("UTF-8"), false);
     pack_start(status_bar, false);
   }
