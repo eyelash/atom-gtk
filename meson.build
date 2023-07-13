@@ -43,6 +43,14 @@ configure_file(
   install_dir: get_option('datadir') / 'dbus-1' / 'services',
 )
 install_data(
+  'data/com.github.eyelash.atom-gtk.svg',
+  install_dir: get_option('datadir') / 'icons' / 'hicolor' / 'scalable' / 'apps',
+)
+#install_data(
+#  'data/com.github.eyelash.atom-gtk-symbolic.svg',
+#  install_dir: get_option('datadir') / 'icons' / 'hicolor' / 'symbolic' / 'apps',
+#)
+install_data(
   'data/atom-gtk',
   install_dir: get_option('bindir'),
 )

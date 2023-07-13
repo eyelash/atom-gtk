@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Atom
-Icon=accessories-text-editor
+Icon=com.github.eyelash.atom-gtk
 DBusActivatable=true
 Exec=com.github.eyelash.atom-gtk %F
 Terminal=false
