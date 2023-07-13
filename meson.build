@@ -1,4 +1,4 @@
-project('atom-gtk', 'vala', 'c', 'cpp')
+project('com.github.eyelash.atom-gtk', 'vala', 'c', 'cpp')
 
 executable(
   meson.project_name(),
@@ -27,4 +27,22 @@ executable(
     subproject('atom-native').get_variable('atom_dep'),
     dependency('gtk+-3.0'),
   ],
+  install: true,
+)
+configuration = {
+  'bindir': get_option('prefix') / get_option('bindir'),
+}
+install_data(
+  'data/com.github.eyelash.atom-gtk.desktop',
+  install_dir: get_option('datadir') / 'applications',
+)
+configure_file(
+  input: 'data/com.github.eyelash.atom-gtk.service.in',
+  output: 'com.github.eyelash.atom-gtk.service',
+  configuration: configuration,
+  install_dir: get_option('datadir') / 'dbus-1' / 'services',
+)
+install_data(
+  'data/atom-gtk',
+  install_dir: get_option('bindir'),
 )

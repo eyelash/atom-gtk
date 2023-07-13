@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=com.github.eyelash.atom-gtk
+Exec=@bindir@/com.github.eyelash.atom-gtk --gapplication-service
