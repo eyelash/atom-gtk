@@ -315,6 +315,7 @@ typedef enum {
   PROP_TITLE,
   PROP_MODIFIED,
   PROP_CURSOR_POSITION,
+  PROP_SELECTION_COUNT,
   N_PROPERTIES
 } AtomTextEditorWidgetProperty;
 
@@ -360,6 +361,7 @@ AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
   });
   priv->text_editor->selectionsMarkerLayer->onDidUpdate([self]() {
     g_object_notify(G_OBJECT(self), "cursor-position");
+    g_object_notify(G_OBJECT(self), "selection-count");
     start_blinking(self);
   });
   priv->text_editor->onDidRequestAutoscroll([self](Range range) {
@@ -576,6 +578,7 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   g_object_class_install_property(G_OBJECT_CLASS(klass), PROP_TITLE, g_param_spec_string("title", NULL, NULL, NULL, (GParamFlags)(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
   g_object_class_install_property(G_OBJECT_CLASS(klass), PROP_MODIFIED, g_param_spec_boolean("modified", NULL, NULL, FALSE, (GParamFlags)(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
   g_object_class_install_property(G_OBJECT_CLASS(klass), PROP_CURSOR_POSITION, g_param_spec_string("cursor-position", NULL, NULL, NULL, (GParamFlags)(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
+  g_object_class_install_property(G_OBJECT_CLASS(klass), PROP_SELECTION_COUNT, g_param_spec_string("selection-count", NULL, NULL, NULL, (GParamFlags)(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
   gtk_widget_class_set_css_name(GTK_WIDGET_CLASS(klass), "atom-text-editor");
 }
 
@@ -688,6 +691,9 @@ static void atom_text_editor_widget_get_property(GObject *object, guint property
   case PROP_CURSOR_POSITION:
     g_value_take_string(value, atom_text_editor_widget_get_cursor_position(self));
     break;
+  case PROP_SELECTION_COUNT:
+    g_value_take_string(value, atom_text_editor_widget_get_selection_count(self));
+    break;
   default:
     break;
   }
@@ -773,6 +779,21 @@ gchar *atom_text_editor_widget_get_cursor_position(AtomTextEditorWidget *self) {
   double row = position.row + 1;
   double column = position.column + 1;
   return g_strdup_printf("%.0f:%.0f", row, column);
+}
+
+gchar *atom_text_editor_widget_get_selection_count(AtomTextEditorWidget *self) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  double count = priv->text_editor->getSelectedText().size();
+  Range range = priv->text_editor->getSelectedBufferRange();
+  double lineCount = range.getRowCount();
+  if (range.end.column == 0) {
+    lineCount -= 1;
+  }
+  if (count > 0) {
+    return g_strdup_printf("(%.0f, %.0f)", lineCount, count);
+  } else {
+    return g_strdup("");
+  }
 }
 
 gboolean atom_text_editor_widget_save(AtomTextEditorWidget *self) {

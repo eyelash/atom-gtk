@@ -4,6 +4,7 @@ namespace Atom {
     public string title { owned get; }
     public bool modified { get; }
     public string cursor_position { owned get; }
+    public string selection_count { owned get; }
     public TextEditorWidget(GLib.File? file);
     public bool save();
     public void save_as(GLib.File file);
