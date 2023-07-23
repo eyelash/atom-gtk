@@ -72,6 +72,7 @@ gchar *atom_text_editor_widget_get_title(AtomTextEditorWidget *);
 gboolean atom_text_editor_widget_get_modified(AtomTextEditorWidget *);
 gchar *atom_text_editor_widget_get_cursor_position(AtomTextEditorWidget *);
 gchar *atom_text_editor_widget_get_selection_count(AtomTextEditorWidget *);
+const gchar *atom_text_editor_widget_get_grammar(AtomTextEditorWidget *);
 gboolean atom_text_editor_widget_save(AtomTextEditorWidget *);
 void atom_text_editor_widget_save_as(AtomTextEditorWidget *, GFile *);
 

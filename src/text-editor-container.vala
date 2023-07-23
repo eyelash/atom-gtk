@@ -16,6 +16,9 @@ class TextEditorContainer : Gtk.Box {
     text_editor_widget.bind_property("cursor-position", cursor_position_label, "label", BindingFlags.SYNC_CREATE);
     status_bar.pack_start(cursor_position_label, false);
     status_bar.reorder_child(cursor_position_label, 0);
+    var grammar_label = new Gtk.Label(null);
+    text_editor_widget.bind_property("grammar", grammar_label, "label", BindingFlags.SYNC_CREATE);
+    status_bar.pack_end(grammar_label, false);
     status_bar.pack_end(new Gtk.Label("UTF-8"), false);
     pack_start(status_bar, false);
   }

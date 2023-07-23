@@ -1,6 +1,7 @@
 #include "text-editor-widget.h"
 #include "layout-cache.h"
 #include <grammar-registry.h>
+#include <grammar.h>
 #include <text-editor.h>
 #include <display-marker-layer.h>
 #include <display-marker.h>
@@ -104,6 +105,8 @@ static void atom_text_editor_widget_redo(AtomTextEditorWidget *);
 static void atom_text_editor_widget_copy(AtomTextEditorWidget *);
 static void atom_text_editor_widget_cut(AtomTextEditorWidget *);
 static void atom_text_editor_widget_paste(AtomTextEditorWidget *);
+
+static GrammarRegistry *grammar_registry = nullptr;
 
 // convert between UTF-8 pointers and UTF-16 offsets
 static const gchar *offset_to_pointer(const gchar *str, glong offset) {
@@ -316,6 +319,7 @@ typedef enum {
   PROP_MODIFIED,
   PROP_CURSOR_POSITION,
   PROP_SELECTION_COUNT,
+  PROP_GRAMMAR,
   N_PROPERTIES
 } AtomTextEditorWidgetProperty;
 
@@ -330,7 +334,6 @@ AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
   } else {
     buffer = new TextBuffer();
   }
-  static GrammarRegistry *grammar_registry = nullptr;
   if (grammar_registry == nullptr) {
     grammar_registry = new GrammarRegistry();
     grammar_registry->addGrammar(atom_language_c());
@@ -340,7 +343,7 @@ AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
     grammar_registry->addGrammar(atom_language_python());
     grammar_registry->addGrammar(atom_language_rust());
   }
-  grammar_registry->autoAssignLanguageMode(buffer);
+  grammar_registry->maintainLanguageMode(buffer);
   priv->text_editor = new TextEditor(buffer);
   if (priv->text_editor->clipboard == nullptr) {
     priv->text_editor->clipboard = new Clipboard();
@@ -372,6 +375,9 @@ AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
   });
   priv->text_editor->onDidChangeModified([self]() {
     g_object_notify(G_OBJECT(self), "modified");
+  });
+  priv->text_editor->onDidChangeGrammar([self]() {
+    g_object_notify(G_OBJECT(self), "grammar");
   });
   const double padding = round(priv->char_width);
   priv->gutter_width = padding * 4 + round(count_digits(priv->text_editor->getScreenLineCount()) * priv->char_width);
@@ -579,6 +585,7 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   g_object_class_install_property(G_OBJECT_CLASS(klass), PROP_MODIFIED, g_param_spec_boolean("modified", NULL, NULL, FALSE, (GParamFlags)(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
   g_object_class_install_property(G_OBJECT_CLASS(klass), PROP_CURSOR_POSITION, g_param_spec_string("cursor-position", NULL, NULL, NULL, (GParamFlags)(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
   g_object_class_install_property(G_OBJECT_CLASS(klass), PROP_SELECTION_COUNT, g_param_spec_string("selection-count", NULL, NULL, NULL, (GParamFlags)(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
+  g_object_class_install_property(G_OBJECT_CLASS(klass), PROP_GRAMMAR, g_param_spec_string("grammar", NULL, NULL, NULL, (GParamFlags)(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
   gtk_widget_class_set_css_name(GTK_WIDGET_CLASS(klass), "atom-text-editor");
 }
 
@@ -694,6 +701,9 @@ static void atom_text_editor_widget_get_property(GObject *object, guint property
   case PROP_SELECTION_COUNT:
     g_value_take_string(value, atom_text_editor_widget_get_selection_count(self));
     break;
+  case PROP_GRAMMAR:
+    g_value_set_static_string(value, atom_text_editor_widget_get_grammar(self));
+    break;
   default:
     break;
   }
@@ -793,6 +803,16 @@ gchar *atom_text_editor_widget_get_selection_count(AtomTextEditorWidget *self) {
     return g_strdup_printf("(%.0f, %.0f)", lineCount, count);
   } else {
     return g_strdup("");
+  }
+}
+
+const gchar *atom_text_editor_widget_get_grammar(AtomTextEditorWidget *self) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  Grammar *grammar = priv->text_editor->getGrammar();
+  if (grammar == grammar_registry->nullGrammar) {
+    return "Plain Text";
+  } else {
+    return grammar->name;
   }
 }
 
