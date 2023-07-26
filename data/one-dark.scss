@@ -141,6 +141,9 @@ atom-text-editor {
 
 .syntax--keyword {
   color: $hue-3;
+  &.syntax--other.syntax--unit {
+    color: $hue-6;
+  }
 }
 
 .syntax--variable {
@@ -170,6 +173,15 @@ atom-text-editor {
   &.syntax--function {
     color: $hue-2;
   }
+  &.syntax--tag {
+    color: $hue-5;
+  }
+  &.syntax--other.syntax--attribute-name {
+    color: $hue-6;
+    &.syntax--id {
+      color: $hue-2;
+    }
+  }
 }
 
 .syntax--meta {
@@ -180,6 +192,9 @@ atom-text-editor {
 
 .syntax--support {
   &.syntax--type {
+    color: $hue-1;
+  }
+  &.syntax--function {
     color: $hue-1;
   }
 }

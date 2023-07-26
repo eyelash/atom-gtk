@@ -13,7 +13,9 @@
 
 extern "C" TreeSitterGrammar *atom_language_c();
 extern "C" TreeSitterGrammar *atom_language_cpp();
+extern "C" TreeSitterGrammar *atom_language_css();
 extern "C" TreeSitterGrammar *atom_language_go();
+extern "C" TreeSitterGrammar *atom_language_html();
 extern "C" TreeSitterGrammar *atom_language_javascript();
 extern "C" TreeSitterGrammar *atom_language_python();
 extern "C" TreeSitterGrammar *atom_language_rust();
@@ -338,7 +340,9 @@ AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
     grammar_registry = new GrammarRegistry();
     grammar_registry->addGrammar(atom_language_c());
     grammar_registry->addGrammar(atom_language_cpp());
+    grammar_registry->addGrammar(atom_language_css());
     grammar_registry->addGrammar(atom_language_go());
+    grammar_registry->addGrammar(atom_language_html());
     grammar_registry->addGrammar(atom_language_javascript());
     grammar_registry->addGrammar(atom_language_python());
     grammar_registry->addGrammar(atom_language_rust());
