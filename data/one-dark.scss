@@ -360,6 +360,8 @@ window {
       color: $tab-text-color;
       font-weight: normal;
       border-left: 1px solid $tab-border-color;
+      border-right-width: 0;
+      background: none;
       box-shadow: none;
       outline: none;
       &:checked {
@@ -382,6 +384,7 @@ window {
         border-color: transparent;
         box-shadow: none;
         outline: none;
+        -gtk-icon-shadow: none;
         transition-duration: 0;
         & > * {
           -gtk-icon-source: -gtk-icontheme('window-close-symbolic');
