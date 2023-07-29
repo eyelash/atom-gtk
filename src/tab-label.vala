@@ -1,7 +1,11 @@
 namespace Atom {
 
 class TabLabel : Gtk.Box {
+  private Atom.TextEditorWidget text_editor_widget;
+
   public TabLabel(Atom.TextEditorWidget text_editor_widget) {
+    this.text_editor_widget = text_editor_widget;
+
     var label = new Gtk.Label(null);
     text_editor_widget.bind_property("title", label, "label", BindingFlags.SYNC_CREATE);
     set_center_widget(label);
@@ -14,13 +18,13 @@ class TabLabel : Gtk.Box {
     close_button.focus_on_click = false;
     close_button.clicked.connect(() => {
       var notebook = get_parent() as unowned Gtk.Notebook;
-      int index = notebook.page_num(text_editor_widget.get_parent().get_parent());
+      int index = notebook.page_num(this.text_editor_widget.get_parent().get_parent());
       notebook.remove_page(index);
     });
     pack_end(close_button, false, true);
 
     text_editor_widget.notify["modified"].connect(() => {
-      if (text_editor_widget.modified) {
+      if (this.text_editor_widget.modified) {
         get_style_context().add_class("modified");
       } else {
         get_style_context().remove_class("modified");
