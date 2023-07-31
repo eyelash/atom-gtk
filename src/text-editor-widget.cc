@@ -654,26 +654,27 @@ static void atom_text_editor_widget_set_property(GObject *object, guint property
   AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(object);
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   switch (property_id) {
-  case PROP_HADJUSTMENT:
-    priv->hadjustment = GTK_ADJUSTMENT(g_value_get_object(value));
-    break;
-  case PROP_VADJUSTMENT:
-    {
-      GtkAdjustment *vadjustment = GTK_ADJUSTMENT(g_value_get_object(value));
-      if (vadjustment != priv->vadjustment) {
-        priv->vadjustment = vadjustment;
-        update(self, false);
+    case PROP_HADJUSTMENT:
+      priv->hadjustment = GTK_ADJUSTMENT(g_value_get_object(value));
+      break;
+    case PROP_VADJUSTMENT:
+      {
+        GtkAdjustment *vadjustment = GTK_ADJUSTMENT(g_value_get_object(value));
+        if (vadjustment != priv->vadjustment) {
+          priv->vadjustment = vadjustment;
+          update(self, false);
+        }
       }
-    }
-    break;
-  case PROP_HSCROLL_POLICY:
-    priv->hscroll_policy = (GtkScrollablePolicy)g_value_get_enum(value);
-    break;
-  case PROP_VSCROLL_POLICY:
-    priv->vscroll_policy = (GtkScrollablePolicy)g_value_get_enum(value);
-    break;
-  default:
-    break;
+      break;
+    case PROP_HSCROLL_POLICY:
+      priv->hscroll_policy = (GtkScrollablePolicy)g_value_get_enum(value);
+      break;
+    case PROP_VSCROLL_POLICY:
+      priv->vscroll_policy = (GtkScrollablePolicy)g_value_get_enum(value);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
+      break;
   }
 }
 
@@ -681,35 +682,36 @@ static void atom_text_editor_widget_get_property(GObject *object, guint property
   AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(object);
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   switch (property_id) {
-  case PROP_HADJUSTMENT:
-    g_value_set_object(value, priv->hadjustment);
-    break;
-  case PROP_VADJUSTMENT:
-    g_value_set_object(value, priv->vadjustment);
-    break;
-  case PROP_HSCROLL_POLICY:
-    g_value_set_enum(value, priv->hscroll_policy);
-    break;
-  case PROP_VSCROLL_POLICY:
-    g_value_set_enum(value, priv->vscroll_policy);
-    break;
-  case PROP_TITLE:
-    g_value_take_string(value, atom_text_editor_widget_get_title(self));
-    break;
-  case PROP_MODIFIED:
-    g_value_set_boolean(value, atom_text_editor_widget_get_modified(self));
-    break;
-  case PROP_CURSOR_POSITION:
-    g_value_take_string(value, atom_text_editor_widget_get_cursor_position(self));
-    break;
-  case PROP_SELECTION_COUNT:
-    g_value_take_string(value, atom_text_editor_widget_get_selection_count(self));
-    break;
-  case PROP_GRAMMAR:
-    g_value_set_static_string(value, atom_text_editor_widget_get_grammar(self));
-    break;
-  default:
-    break;
+    case PROP_HADJUSTMENT:
+      g_value_set_object(value, priv->hadjustment);
+      break;
+    case PROP_VADJUSTMENT:
+      g_value_set_object(value, priv->vadjustment);
+      break;
+    case PROP_HSCROLL_POLICY:
+      g_value_set_enum(value, priv->hscroll_policy);
+      break;
+    case PROP_VSCROLL_POLICY:
+      g_value_set_enum(value, priv->vscroll_policy);
+      break;
+    case PROP_TITLE:
+      g_value_take_string(value, atom_text_editor_widget_get_title(self));
+      break;
+    case PROP_MODIFIED:
+      g_value_set_boolean(value, atom_text_editor_widget_get_modified(self));
+      break;
+    case PROP_CURSOR_POSITION:
+      g_value_take_string(value, atom_text_editor_widget_get_cursor_position(self));
+      break;
+    case PROP_SELECTION_COUNT:
+      g_value_take_string(value, atom_text_editor_widget_get_selection_count(self));
+      break;
+    case PROP_GRAMMAR:
+      g_value_set_static_string(value, atom_text_editor_widget_get_grammar(self));
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
+      break;
   }
 }
 
@@ -974,60 +976,60 @@ static void parse_decoration(
 ) {
   DisplayMarker *marker = decoration.first;
   for (const auto &properties : decoration.second) {
-    switch(properties.type) {
-    case Decoration::Type::line:
-    case Decoration::Type::line_number:
-      {
-        const Range range = marker->getScreenRange();
-        const bool reversed = marker->isReversed();
+    switch (properties.type) {
+      case Decoration::Type::line:
+      case Decoration::Type::line_number:
+        {
+          const Range range = marker->getScreenRange();
+          const bool reversed = marker->isReversed();
 
-        bool omit_last_row = false;
-        if (range.isEmpty()) {
-          if (properties.onlyNonEmpty) continue;
-        } else {
-          if (properties.onlyEmpty) continue;
-          if (properties.omitEmptyLastRow) {
-            omit_last_row = range.end.column == 0;
+          bool omit_last_row = false;
+          if (range.isEmpty()) {
+            if (properties.onlyNonEmpty) continue;
+          } else {
+            if (properties.onlyEmpty) continue;
+            if (properties.omitEmptyLastRow) {
+              omit_last_row = range.end.column == 0;
+            }
           }
-        }
 
-        double range_start_row = range.start.row;
-        double range_end_row = range.end.row;
-        if (properties.onlyHead) {
-          if (reversed) {
-            range_end_row = range_start_row;
-          } else {
-            range_start_row = range_end_row;
+          double range_start_row = range.start.row;
+          double range_end_row = range.end.row;
+          if (properties.onlyHead) {
+            if (reversed) {
+              range_end_row = range_start_row;
+            } else {
+              range_start_row = range_end_row;
+            }
+          }
+          range_start_row = std::max(range_start_row, start_row);
+          range_end_row = std::min(range_end_row, end_row - 1);
+          for (double row = range_start_row; row <= range_end_row; row++) {
+            if (omit_last_row && row == range.end.row) break;
+            if (properties.type == Decoration::Type::line) {
+              add_class(line_classes[row - start_row], properties.class_);
+            } else {
+              add_class(gutter_classes[row - start_row], properties.class_);
+            }
           }
         }
-        range_start_row = std::max(range_start_row, start_row);
-        range_end_row = std::min(range_end_row, end_row - 1);
-        for (double row = range_start_row; row <= range_end_row; row++) {
-          if (omit_last_row && row == range.end.row) break;
-          if (properties.type == Decoration::Type::line) {
-            add_class(line_classes[row - start_row], properties.class_);
-          } else {
-            add_class(gutter_classes[row - start_row], properties.class_);
-          }
+        break;
+      case Decoration::Type::highlight:
+        {
+          const Range range = constrain_range_to_rows(marker->getScreenRange(), start_row, end_row);
+          if (range.isEmpty()) continue;
+          highlights.push_back({range, properties.class_});
         }
         break;
-      }
-    case Decoration::Type::highlight:
-      {
-        const Range range = constrain_range_to_rows(marker->getScreenRange(), start_row, end_row);
-        if (range.isEmpty()) continue;
-        highlights.push_back({range, properties.class_});
+      case Decoration::Type::cursor:
+        {
+          const Point position = marker->getHeadScreenPosition();
+          if (position.row < start_row || position.row >= end_row) continue;
+          cursors.push_back({position.row, position.column});
+        }
         break;
-      }
-    case Decoration::Type::cursor:
-      {
-        const Point position = marker->getHeadScreenPosition();
-        if (position.row < start_row || position.row >= end_row) continue;
-        cursors.push_back({position.row, position.column});
+      default:
         break;
-      }
-    default:
-      break;
     }
   }
 }
@@ -1302,34 +1304,34 @@ static void atom_text_editor_widget_handle_pressed(GtkGestureMultiPress *multipr
     }
     if (button != GDK_BUTTON_PRIMARY) return;
     switch (n_press) {
-    case 1:
-      if (modify_selection) {
-        Selection *selection = priv->text_editor->getSelectionAtScreenPosition(screen_position);
-        if (selection) {
-          if (priv->text_editor->hasMultipleCursors()) selection->destroy();
+      case 1:
+        if (modify_selection) {
+          Selection *selection = priv->text_editor->getSelectionAtScreenPosition(screen_position);
+          if (selection) {
+            if (priv->text_editor->hasMultipleCursors()) selection->destroy();
+          } else {
+            priv->text_editor->addCursorAtScreenPosition(screen_position);
+          }
         } else {
+          if (extend_selection) {
+            priv->text_editor->selectToScreenPosition(screen_position);
+          } else {
+            priv->text_editor->setCursorScreenPosition(screen_position);
+          }
+        }
+        break;
+      case 2:
+        if (modify_selection) {
           priv->text_editor->addCursorAtScreenPosition(screen_position);
         }
-      } else {
-        if (extend_selection) {
-          priv->text_editor->selectToScreenPosition(screen_position);
-        } else {
-          priv->text_editor->setCursorScreenPosition(screen_position);
+        priv->text_editor->getLastSelection()->selectWord();
+        break;
+      case 3:
+        if (modify_selection) {
+          priv->text_editor->addCursorAtScreenPosition(screen_position);
         }
-      }
-      break;
-    case 2:
-      if (modify_selection) {
-        priv->text_editor->addCursorAtScreenPosition(screen_position);
-      }
-      priv->text_editor->getLastSelection()->selectWord();
-      break;
-    case 3:
-      if (modify_selection) {
-        priv->text_editor->addCursorAtScreenPosition(screen_position);
-      }
-      priv->text_editor->getLastSelection()->selectLine();
-      break;
+        priv->text_editor->getLastSelection()->selectLine();
+        break;
     }
   }
   gtk_widget_queue_draw(GTK_WIDGET(self));
