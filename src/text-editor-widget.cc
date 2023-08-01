@@ -10,6 +10,7 @@
 #include <clipboard.h>
 #include <bracket-matcher.h>
 #include <select-next.h>
+#include <whitespace.h>
 
 extern "C" TreeSitterGrammar *atom_language_c();
 extern "C" TreeSitterGrammar *atom_language_cpp();
@@ -108,7 +109,8 @@ static void atom_text_editor_widget_copy(AtomTextEditorWidget *);
 static void atom_text_editor_widget_cut(AtomTextEditorWidget *);
 static void atom_text_editor_widget_paste(AtomTextEditorWidget *);
 
-static GrammarRegistry *grammar_registry = nullptr;
+static GrammarRegistry grammar_registry;
+static Whitespace whitespace;
 
 // convert between UTF-8 pointers and UTF-16 offsets
 static const gchar *offset_to_pointer(const gchar *str, glong offset) {
@@ -336,24 +338,11 @@ AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
   } else {
     buffer = new TextBuffer();
   }
-  if (grammar_registry == nullptr) {
-    grammar_registry = new GrammarRegistry();
-    grammar_registry->addGrammar(atom_language_c());
-    grammar_registry->addGrammar(atom_language_cpp());
-    grammar_registry->addGrammar(atom_language_css());
-    grammar_registry->addGrammar(atom_language_go());
-    grammar_registry->addGrammar(atom_language_html());
-    grammar_registry->addGrammar(atom_language_javascript());
-    grammar_registry->addGrammar(atom_language_python());
-    grammar_registry->addGrammar(atom_language_rust());
-  }
-  grammar_registry->maintainLanguageMode(buffer);
+  grammar_registry.maintainLanguageMode(buffer);
   priv->text_editor = new TextEditor(buffer);
-  if (priv->text_editor->clipboard == nullptr) {
-    priv->text_editor->clipboard = new Clipboard();
-  }
   priv->bracket_matcher = new BracketMatcher(priv->text_editor);
   priv->select_next = new SelectNext(priv->text_editor);
+  whitespace.handleEvents(priv->text_editor);
   priv->text_editor->onDidChange([self]() {
     update(self);
   });
@@ -591,6 +580,14 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   g_object_class_install_property(G_OBJECT_CLASS(klass), PROP_SELECTION_COUNT, g_param_spec_string("selection-count", NULL, NULL, NULL, (GParamFlags)(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
   g_object_class_install_property(G_OBJECT_CLASS(klass), PROP_GRAMMAR, g_param_spec_string("grammar", NULL, NULL, NULL, (GParamFlags)(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
   gtk_widget_class_set_css_name(GTK_WIDGET_CLASS(klass), "atom-text-editor");
+  grammar_registry.addGrammar(atom_language_c());
+  grammar_registry.addGrammar(atom_language_cpp());
+  grammar_registry.addGrammar(atom_language_css());
+  grammar_registry.addGrammar(atom_language_go());
+  grammar_registry.addGrammar(atom_language_html());
+  grammar_registry.addGrammar(atom_language_javascript());
+  grammar_registry.addGrammar(atom_language_python());
+  grammar_registry.addGrammar(atom_language_rust());
 }
 
 static void atom_text_editor_widget_init(AtomTextEditorWidget *self) {
@@ -815,7 +812,7 @@ gchar *atom_text_editor_widget_get_selection_count(AtomTextEditorWidget *self) {
 const gchar *atom_text_editor_widget_get_grammar(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   Grammar *grammar = priv->text_editor->getGrammar();
-  if (grammar == grammar_registry->nullGrammar) {
+  if (grammar == grammar_registry.nullGrammar) {
     return "Plain Text";
   } else {
     return grammar->name;
@@ -1670,7 +1667,7 @@ static void atom_text_editor_widget_redo(AtomTextEditorWidget *self) {
 static void atom_text_editor_widget_copy(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   priv->text_editor->copySelectedText();
-  const std::u16string &text = priv->text_editor->clipboard->systemText;
+  const std::u16string &text = priv->text_editor->clipboard.systemText;
   gchar *utf8 = g_utf16_to_utf8((const gunichar2 *)text.c_str(), text.size(), NULL, NULL, NULL);
   GtkClipboard *clipboard = gtk_widget_get_clipboard(GTK_WIDGET(self), GDK_SELECTION_CLIPBOARD);
   gtk_clipboard_set_text(clipboard, utf8, -1);
@@ -1680,7 +1677,7 @@ static void atom_text_editor_widget_copy(AtomTextEditorWidget *self) {
 static void atom_text_editor_widget_cut(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   priv->text_editor->cutSelectedText();
-  const std::u16string &text = priv->text_editor->clipboard->systemText;
+  const std::u16string &text = priv->text_editor->clipboard.systemText;
   gchar *utf8 = g_utf16_to_utf8((const gunichar2 *)text.c_str(), text.size(), NULL, NULL, NULL);
   GtkClipboard *clipboard = gtk_widget_get_clipboard(GTK_WIDGET(self), GDK_SELECTION_CLIPBOARD);
   gtk_clipboard_set_text(clipboard, utf8, -1);
@@ -1693,7 +1690,7 @@ static void atom_text_editor_widget_paste(AtomTextEditorWidget *self) {
     AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(user_data);
     AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
     gunichar2 *utf16 = g_utf8_to_utf16(text, -1, NULL, NULL, NULL);
-    priv->text_editor->clipboard->systemText = (const char16_t *)utf16;
+    priv->text_editor->clipboard.systemText = (const char16_t *)utf16;
     priv->text_editor->pasteText();
     g_free(utf16);
   }, self);
