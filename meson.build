@@ -5,7 +5,6 @@ executable(
   'src/application.vala',
   'src/window.vala',
   'src/notebook.vala',
-  'src/tab-label.vala',
   'src/text-editor-container.vala',
   'src/atom.vapi',
   'src/text-editor-widget.cc',
