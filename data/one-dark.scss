@@ -393,7 +393,7 @@ window {
         border-left-color: transparent;
       }
       button {
-        color: transparent;
+        color: inherit;
         background-color: transparent;
         background-image: none;
         border-color: transparent;
@@ -401,12 +401,6 @@ window {
         outline: none;
         -gtk-icon-shadow: none;
         transition-duration: 0;
-        & > * {
-          -gtk-icon-source: -gtk-icontheme('window-close-symbolic');
-        }
-      }
-      &:hover button {
-        color: inherit;
         &:hover {
           color: $accent-text-color;
           background-color: $accent-color;
@@ -415,19 +409,8 @@ window {
           background-color: fade($accent-color, 50%);
         }
       }
-      .modified button {
+      .modified {
         color: $accent-color;
-        & > * {
-          -gtk-icon-source: -gtk-icontheme('media-record-symbolic');
-        }
-      }
-      &:hover .modified button {
-        & > * {
-          -gtk-icon-source: -gtk-icontheme('window-close-symbolic');
-        }
-        &:hover {
-          color: $tab-text-color-active;
-        }
       }
     }
   }
