@@ -180,6 +180,46 @@ public:
   }
 };
 
+class Value {
+  GValue value;
+public:
+  Value() : value(G_VALUE_INIT) {}
+  Value(const Value &other) : value(G_VALUE_INIT) {
+    GType type = G_VALUE_TYPE(&other.value);
+    if (type) {
+      g_value_init(&value, type);
+      g_value_copy(&other.value, &value);
+    }
+  }
+  ~Value() {
+    g_value_unset(&value);
+  }
+  Value &operator =(const Value &other) {
+    g_value_unset(&value);
+    GType type = G_VALUE_TYPE(&other.value);
+    if (type) {
+      g_value_init(&value, type);
+      g_value_copy(&other.value, &value);
+    }
+    return *this;
+  }
+  GValue *get() {
+    return &value;
+  }
+  void get(gint *integer) {
+    *integer = g_value_get_int(&value);
+  }
+  void get(GdkRGBA *color) {
+    *color = *(GdkRGBA *)g_value_get_boxed(&value);
+  }
+  void get(PangoStyle *style) {
+    *style = (PangoStyle)g_value_get_enum(&value);
+  }
+  void get(PangoWeight *weight) {
+    *weight = (PangoWeight)g_value_get_enum(&value);
+  }
+};
+
 class StyleCache {
   struct Key {
     const gchar *property;
@@ -198,78 +238,37 @@ class StyleCache {
       return lhs.property == rhs.property && lhs.path == rhs.path;
     }
   };
-  std::unordered_map<Key, std::pair<GdkRGBA, size_t>, Hash, Equal> color_cache;
-  std::unordered_map<Key, std::pair<PangoStyle, size_t>, Hash, Equal> font_style_cache;
-  std::unordered_map<Key, std::pair<PangoWeight, size_t>, Hash, Equal> font_weight_cache;
+  std::unordered_map<Key, std::pair<Value, size_t>, Hash, Equal> cache;
   size_t generation = 0;
 public:
   void increment_generation() {
     generation++;
   }
   void collect_garbage() {
-    for (auto iterator = color_cache.begin(); iterator != color_cache.end();) {
+    for (auto iterator = cache.begin(); iterator != cache.end();) {
       if (iterator->second.second != generation) {
-        iterator = color_cache.erase(iterator);
-      } else {
-        ++iterator;
-      }
-    }
-    for (auto iterator = font_style_cache.begin(); iterator != font_style_cache.end();) {
-      if (iterator->second.second != generation) {
-        iterator = font_style_cache.erase(iterator);
-      } else {
-        ++iterator;
-      }
-    }
-    for (auto iterator = font_weight_cache.begin(); iterator != font_weight_cache.end();) {
-      if (iterator->second.second != generation) {
-        iterator = font_weight_cache.erase(iterator);
+        iterator = cache.erase(iterator);
       } else {
         ++iterator;
       }
     }
   }
-  void get_property(GtkWidget *widget, const std::vector<std::string> &path, const gchar *property, GdkRGBA *color) {
+  Value get_property(GtkWidget *widget, const std::vector<std::string> &path, const gchar *property) {
     Key key{property, path};
-    auto iterator = color_cache.find(key);
-    if (iterator != color_cache.end()) {
+    auto iterator = cache.find(key);
+    if (iterator != cache.end()) {
       iterator->second.second = generation;
-      *color = iterator->second.first;
+      return iterator->second.first;
     } else {
-      GValue value = G_VALUE_INIT;
-      get_style_property_for_path(widget, path, property, &value);
-      *color = *(GdkRGBA *)g_value_get_boxed(&value);
-      g_value_unset(&value);
-      color_cache.insert({key, {*color, generation}});
+      Value value;
+      get_style_property_for_path(widget, path, property, value.get());
+      cache.insert({key, {value, generation}});
+      return value;
     }
   }
-  void get_property(GtkWidget *widget, const std::vector<std::string> &path, const gchar *property, PangoStyle *style) {
-    Key key{property, path};
-    auto iterator = font_style_cache.find(key);
-    if (iterator != font_style_cache.end()) {
-      iterator->second.second = generation;
-      *style = iterator->second.first;
-    } else {
-      GValue value = G_VALUE_INIT;
-      get_style_property_for_path(widget, path, property, &value);
-      *style = (PangoStyle)g_value_get_enum(&value);
-      g_value_unset(&value);
-      font_style_cache.insert({key, {*style, generation}});
-    }
-  }
-  void get_property(GtkWidget *widget, const std::vector<std::string> &path, const gchar *property, PangoWeight *weight) {
-    Key key{property, path};
-    auto iterator = font_weight_cache.find(key);
-    if (iterator != font_weight_cache.end()) {
-      iterator->second.second = generation;
-      *weight = iterator->second.first;
-    } else {
-      GValue value = G_VALUE_INIT;
-      get_style_property_for_path(widget, path, property, &value);
-      *weight = (PangoWeight)g_value_get_enum(&value);
-      g_value_unset(&value);
-      font_weight_cache.insert({key, {*weight, generation}});
-    }
+  template <class T> void get_property(GtkWidget *widget, const std::vector<std::string> &path, const gchar *property, T *t) {
+    Value value = get_property(widget, path, property);
+    value.get(t);
   }
 };
 
