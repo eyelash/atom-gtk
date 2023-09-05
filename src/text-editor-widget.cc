@@ -8,7 +8,9 @@
 #include <decoration-manager.h>
 #include <selection.h>
 #include <clipboard.h>
+#include <match-manager.h>
 #include <bracket-matcher.h>
+#include <bracket-matcher-view.h>
 #include <select-next.h>
 #include <whitespace.h>
 
@@ -218,6 +220,9 @@ public:
   void get(PangoWeight *weight) {
     *weight = (PangoWeight)g_value_get_enum(&value);
   }
+  void get(GtkBorderStyle *border_style) {
+    *border_style = (GtkBorderStyle)g_value_get_enum(&value);
+  }
 };
 
 class StyleCache {
@@ -284,7 +289,9 @@ static int count_digits(int n) {
 typedef struct {
   GtkWidget parent_instance;
   TextEditor *text_editor;
+  MatchManager *match_manager;
   BracketMatcher *bracket_matcher;
+  BracketMatcherView *bracket_matcher_view;
   SelectNext *select_next;
   GtkAdjustment *hadjustment;
   GtkAdjustment *vadjustment;
@@ -339,7 +346,9 @@ AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
   }
   grammar_registry.maintainLanguageMode(buffer);
   priv->text_editor = new TextEditor(buffer);
-  priv->bracket_matcher = new BracketMatcher(priv->text_editor);
+  priv->match_manager = new MatchManager(priv->text_editor);
+  priv->bracket_matcher = new BracketMatcher(priv->text_editor, priv->match_manager);
+  priv->bracket_matcher_view = new BracketMatcherView(priv->text_editor, priv->match_manager);
   priv->select_next = new SelectNext(priv->text_editor);
   whitespace.handleEvents(priv->text_editor);
   priv->text_editor->onDidChange([self]() {
@@ -641,7 +650,9 @@ static void atom_text_editor_widget_finalize(GObject *object) {
   delete priv->layout_cache;
   pango_font_description_free(priv->font_description);
   delete priv->select_next;
+  delete priv->bracket_matcher_view;
   delete priv->bracket_matcher;
+  delete priv->match_manager;
   delete priv->text_editor;
   G_OBJECT_CLASS(atom_text_editor_widget_parent_class)->finalize(object);
 }
@@ -1083,13 +1094,13 @@ static void draw_lines(
   for (const auto &highlight : highlights) {
     const Range range = highlight.first;
     const char *class_ = highlight.second;
-    GdkRGBA highlight_color;
     std::vector<std::string> path;
     path.push_back("highlights");
     path.push_back(std::string("highlight ") + class_);
     path.push_back(std::string("region ") + class_);
-    priv->style_cache->get_property(widget, path, "background-color", &highlight_color);
-    gdk_cairo_set_source_rgba(cr, &highlight_color);
+    GdkRGBA background_color;
+    priv->style_cache->get_property(widget, path, "background-color", &background_color);
+    gdk_cairo_set_source_rgba(cr, &background_color);
     double y_start = range.start.row * priv->line_height;
     double y_end = y_start + priv->line_height;
     double x_start = layouts[range.start.row - start_row].index_to_x(range.start.column);
@@ -1113,6 +1124,18 @@ static void draw_lines(
       }
     }
     cairo_fill(cr);
+    GtkBorderStyle border_bottom_style;
+    priv->style_cache->get_property(widget, path, "border-bottom-style", &border_bottom_style);
+    if (range.start.row == range.end.row && border_bottom_style != GTK_BORDER_STYLE_NONE) {
+      GdkRGBA border_bottom_color;
+      priv->style_cache->get_property(widget, path, "border-bottom-color", &border_bottom_color);
+      gdk_cairo_set_source_rgba(cr, &border_bottom_color);
+      double y = range.start.row * priv->line_height + priv->line_height - 1;
+      double x_start = layouts[range.start.row - start_row].index_to_x(range.start.column);
+      double x_end = layouts[range.start.row - start_row].index_to_x(range.end.column);
+      cairo_rectangle(cr, x_start, y, x_end - x_start, 1);
+      cairo_fill(cr);
+    }
   }
   GdkRGBA text_color;
   priv->style_cache->get_property(widget, {}, "color", &text_color);

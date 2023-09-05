@@ -115,6 +115,10 @@ atom-text-editor {
     background-color: $syntax-selection-color;
   }
 
+  .bracket-matcher .region {
+    border-bottom: 1px solid $syntax-cursor-color;
+  }
+
   .invisible-character {
     color: $syntax-invisible-character-color;
   }
