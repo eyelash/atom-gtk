@@ -258,22 +258,18 @@ public:
       }
     }
   }
-  Value get_property(GtkWidget *widget, const std::vector<std::string> &path, const gchar *property) {
+  template <class T> void get_property(GtkWidget *widget, const std::vector<std::string> &path, const gchar *property, T *t) {
     Key key{property, path};
     auto iterator = cache.find(key);
     if (iterator != cache.end()) {
       iterator->second.second = generation;
-      return iterator->second.first;
+      iterator->second.first.get(t);
     } else {
       Value value;
       get_style_property_for_path(widget, path, property, value.get());
+      value.get(t);
       cache.insert({key, {value, generation}});
-      return value;
     }
-  }
-  template <class T> void get_property(GtkWidget *widget, const std::vector<std::string> &path, const gchar *property, T *t) {
-    Value value = get_property(widget, path, property);
-    value.get(t);
   }
 };
 
@@ -1078,6 +1074,40 @@ static void draw_gutter(
   cairo_paint_with_alpha(cr, 0.6);
 }
 
+template <class F> static void iterate_highlight_rectangles(
+  AtomTextEditorWidgetPrivate *priv,
+  double allocated_width,
+  double start_row,
+  double end_row,
+  const std::vector<Layout> &layouts,
+  const std::pair<Range, const char *> &highlight,
+  F f
+) {
+  const Range range = highlight.first;
+  double y_start = range.start.row * priv->line_height;
+  double y_end = y_start + priv->line_height;
+  double x_start = layouts[range.start.row - start_row].index_to_x(range.start.column);
+  if (range.start.row == range.end.row) {
+    double x_end = layouts[range.start.row - start_row].index_to_x(range.end.column);
+    f(x_start, y_start, x_end - x_start, y_end - y_start);
+  } else {
+    double x_end = allocated_width;
+    f(x_start, y_start, x_end - x_start, y_end - y_start);
+    y_start = y_end;
+    x_start = 0;
+    if (range.end.row > range.start.row + 1) {
+      y_end = range.end.row * priv->line_height;
+      f(x_start, y_start, x_end - x_start, y_end - y_start);
+      y_start = y_end;
+    }
+    if (range.end.column > 0) {
+      y_end = y_start + priv->line_height;
+      x_end = layouts[range.end.row - start_row].index_to_x(range.end.column);
+      f(x_start, y_start, x_end - x_start, y_end - y_start);
+    }
+  }
+}
+
 static void draw_lines(
   GtkWidget *widget,
   cairo_t *cr,
@@ -1092,7 +1122,6 @@ static void draw_lines(
   AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(widget);
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   for (const auto &highlight : highlights) {
-    const Range range = highlight.first;
     const char *class_ = highlight.second;
     std::vector<std::string> path;
     path.push_back("highlights");
@@ -1100,40 +1129,24 @@ static void draw_lines(
     path.push_back(std::string("region ") + class_);
     GdkRGBA background_color;
     priv->style_cache->get_property(widget, path, "background-color", &background_color);
-    gdk_cairo_set_source_rgba(cr, &background_color);
-    double y_start = range.start.row * priv->line_height;
-    double y_end = y_start + priv->line_height;
-    double x_start = layouts[range.start.row - start_row].index_to_x(range.start.column);
-    if (range.start.row == range.end.row) {
-      double x_end = layouts[range.start.row - start_row].index_to_x(range.end.column);
-      cairo_rectangle(cr, x_start, y_start, x_end - x_start, y_end - y_start);
-    } else {
-      double x_end = allocated_width;
-      cairo_rectangle(cr, x_start, y_start, x_end - x_start, y_end - y_start);
-      y_start = y_end;
-      x_start = 0;
-      if (range.end.row > range.start.row + 1) {
-        y_end = range.end.row * priv->line_height;
-        cairo_rectangle(cr, x_start, y_start, x_end - x_start, y_end - y_start);
-        y_start = y_end;
-      }
-      if (range.end.column > 0) {
-        y_end = y_start + priv->line_height;
-        x_end = layouts[range.end.row - start_row].index_to_x(range.end.column);
-        cairo_rectangle(cr, x_start, y_start, x_end - x_start, y_end - y_start);
-      }
-    }
-    cairo_fill(cr);
     GtkBorderStyle border_bottom_style;
     priv->style_cache->get_property(widget, path, "border-bottom-style", &border_bottom_style);
-    if (range.start.row == range.end.row && border_bottom_style != GTK_BORDER_STYLE_NONE) {
+    gint border_bottom_width = 0;
+    if (border_bottom_style != GTK_BORDER_STYLE_NONE) {
+      priv->style_cache->get_property(widget, path, "border-bottom-width", &border_bottom_width);
+    }
+    gdk_cairo_set_source_rgba(cr, &background_color);
+    iterate_highlight_rectangles(priv, allocated_width, start_row, end_row, layouts, highlight, [&](double x, double y, double width, double height) {
+      cairo_rectangle(cr, x, y, width, height - border_bottom_width);
+    });
+    cairo_fill(cr);
+    if (border_bottom_style != GTK_BORDER_STYLE_NONE && border_bottom_width > 0) {
       GdkRGBA border_bottom_color;
       priv->style_cache->get_property(widget, path, "border-bottom-color", &border_bottom_color);
       gdk_cairo_set_source_rgba(cr, &border_bottom_color);
-      double y = range.start.row * priv->line_height + priv->line_height - 1;
-      double x_start = layouts[range.start.row - start_row].index_to_x(range.start.column);
-      double x_end = layouts[range.start.row - start_row].index_to_x(range.end.column);
-      cairo_rectangle(cr, x_start, y, x_end - x_start, 1);
+      iterate_highlight_rectangles(priv, allocated_width, start_row, end_row, layouts, highlight, [&](double x, double y, double width, double height) {
+        cairo_rectangle(cr, x, y + height - border_bottom_width, width, border_bottom_width);
+      });
       cairo_fill(cr);
     }
   }
@@ -1154,11 +1167,13 @@ static void draw_lines(
   GdkRGBA cursor_color;
   priv->style_cache->get_property(widget, {"cursor"}, "border-left-color", &cursor_color);
   gdk_cairo_set_source_rgba(cr, &cursor_color);
+  gint cursor_width;
+  priv->style_cache->get_property(widget, {"cursor"}, "border-left-width", &cursor_width);
   if (priv->draw_cursors) {
     for (const auto &cursor : cursors) {
       double y = cursor.first * priv->line_height;
       double x = layouts[cursor.first - start_row].index_to_x(cursor.second);
-      cairo_rectangle(cr, x, y, 2, priv->line_height);
+      cairo_rectangle(cr, x, y, cursor_width, priv->line_height);
       cairo_fill(cr);
     }
   }
