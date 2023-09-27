@@ -50,7 +50,7 @@ static void atom_text_editor_widget_handle_pressed(GtkGestureMultiPress *, gint,
 static void atom_text_editor_widget_handle_released(GtkGestureMultiPress *, gint, gdouble, gdouble, gpointer);
 static void atom_text_editor_widget_handle_drag_update(GtkGestureDrag *, gdouble, gdouble, gpointer);
 static void update(AtomTextEditorWidget *, bool = true);
-static void autoscroll(AtomTextEditorWidget *, Range);
+static void autoscroll(AtomTextEditorWidget *, const Range &);
 static void start_blinking(AtomTextEditorWidget *);
 static void stop_blinking(AtomTextEditorWidget *);
 static Point get_screen_position(AtomTextEditorWidget *, double, double);
@@ -342,6 +342,9 @@ AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
   }
   grammar_registry.maintainLanguageMode(buffer);
   priv->text_editor = new TextEditor(buffer);
+  if (optional<bool> uses_soft_tabs = priv->text_editor->usesSoftTabs()) {
+    priv->text_editor->setSoftTabs(*uses_soft_tabs);
+  }
   priv->match_manager = new MatchManager(priv->text_editor);
   priv->bracket_matcher = new BracketMatcher(priv->text_editor, priv->match_manager);
   priv->bracket_matcher_view = new BracketMatcherView(priv->text_editor, priv->match_manager);
@@ -364,7 +367,7 @@ AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
     g_object_notify(G_OBJECT(self), "selection-count");
     start_blinking(self);
   });
-  priv->text_editor->onDidRequestAutoscroll([self](Range range) {
+  priv->text_editor->onDidRequestAutoscroll([self](const Range &range) {
     autoscroll(self, range);
   });
   priv->text_editor->onDidChangeTitle([self]() {
@@ -1422,7 +1425,7 @@ static void update(AtomTextEditorWidget *self, bool redraw) {
   if (redraw) gtk_widget_queue_draw(GTK_WIDGET(self));
 }
 
-static void autoscroll(AtomTextEditorWidget *self, Range range) {
+static void autoscroll(AtomTextEditorWidget *self, const Range &range) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   const double min_value = std::min((range.end.row + 1) * priv->line_height + 50, gtk_adjustment_get_upper(priv->vadjustment)) - gtk_adjustment_get_page_size(priv->vadjustment);
   const double max_value = std::max(range.start.row * priv->line_height - 50, 0.0);
