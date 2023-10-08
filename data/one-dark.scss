@@ -207,6 +207,27 @@ atom-text-editor {
   color: $hue-3;
 }
 
+.syntax--markup {
+  &.syntax--link {
+    color: $hue-1;
+  }
+}
+
+.syntax--source.syntax--css {
+  .syntax--constant {
+    color: $mono-2;
+    &.syntax--support {
+      color: $mono-1;
+    }
+    &.syntax--numeric {
+      color: $hue-6;
+    }
+    &.syntax--color {
+      color: $hue-6;
+    }
+  }
+}
+
 $ui-syntax-color: $syntax-background-color;
 
 // Color guards

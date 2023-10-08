@@ -20,6 +20,7 @@ extern "C" TreeSitterGrammar *atom_language_css();
 extern "C" TreeSitterGrammar *atom_language_go();
 extern "C" TreeSitterGrammar *atom_language_html();
 extern "C" TreeSitterGrammar *atom_language_javascript();
+extern "C" TreeSitterGrammar *atom_language_json();
 extern "C" TreeSitterGrammar *atom_language_python();
 extern "C" TreeSitterGrammar *atom_language_rust();
 
@@ -593,6 +594,7 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   grammar_registry.addGrammar(atom_language_go());
   grammar_registry.addGrammar(atom_language_html());
   grammar_registry.addGrammar(atom_language_javascript());
+  grammar_registry.addGrammar(atom_language_json());
   grammar_registry.addGrammar(atom_language_python());
   grammar_registry.addGrammar(atom_language_rust());
 }
