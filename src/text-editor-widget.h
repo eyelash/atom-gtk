@@ -70,6 +70,7 @@ struct _AtomTextEditorWidgetClass {
 AtomTextEditorWidget *atom_text_editor_widget_new(GFile *);
 gchar *atom_text_editor_widget_get_title(AtomTextEditorWidget *);
 gboolean atom_text_editor_widget_get_modified(AtomTextEditorWidget *);
+gchar *atom_text_editor_widget_get_path(AtomTextEditorWidget *);
 gchar *atom_text_editor_widget_get_cursor_position(AtomTextEditorWidget *);
 gchar *atom_text_editor_widget_get_selection_count(AtomTextEditorWidget *);
 const gchar *atom_text_editor_widget_get_grammar(AtomTextEditorWidget *);

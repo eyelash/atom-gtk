@@ -13,6 +13,7 @@
 #include <bracket-matcher-view.h>
 #include <select-next.h>
 #include <whitespace.h>
+#include <fs-plus.h>
 
 extern "C" TreeSitterGrammar *atom_language_c();
 extern "C" TreeSitterGrammar *atom_language_cpp();
@@ -324,6 +325,7 @@ typedef enum {
   PROP_VSCROLL_POLICY,
   PROP_TITLE,
   PROP_MODIFIED,
+  PROP_PATH,
   PROP_CURSOR_POSITION,
   PROP_SELECTION_COUNT,
   PROP_GRAMMAR,
@@ -376,6 +378,7 @@ AtomTextEditorWidget *atom_text_editor_widget_new(GFile *file) {
   });
   priv->text_editor->onDidChangeModified([self]() {
     g_object_notify(G_OBJECT(self), "modified");
+    g_object_notify(G_OBJECT(self), "path");
   });
   priv->text_editor->onDidChangeGrammar([self]() {
     g_object_notify(G_OBJECT(self), "grammar");
@@ -584,6 +587,7 @@ static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass)
   g_object_class_override_property(G_OBJECT_CLASS(klass), PROP_VSCROLL_POLICY, "vscroll-policy");
   g_object_class_install_property(G_OBJECT_CLASS(klass), PROP_TITLE, g_param_spec_string("title", NULL, NULL, NULL, (GParamFlags)(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
   g_object_class_install_property(G_OBJECT_CLASS(klass), PROP_MODIFIED, g_param_spec_boolean("modified", NULL, NULL, FALSE, (GParamFlags)(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
+  g_object_class_install_property(G_OBJECT_CLASS(klass), PROP_PATH, g_param_spec_string("path", NULL, NULL, NULL, (GParamFlags)(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
   g_object_class_install_property(G_OBJECT_CLASS(klass), PROP_CURSOR_POSITION, g_param_spec_string("cursor-position", NULL, NULL, NULL, (GParamFlags)(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
   g_object_class_install_property(G_OBJECT_CLASS(klass), PROP_SELECTION_COUNT, g_param_spec_string("selection-count", NULL, NULL, NULL, (GParamFlags)(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
   g_object_class_install_property(G_OBJECT_CLASS(klass), PROP_GRAMMAR, g_param_spec_string("grammar", NULL, NULL, NULL, (GParamFlags)(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
@@ -708,6 +712,9 @@ static void atom_text_editor_widget_get_property(GObject *object, guint property
     case PROP_MODIFIED:
       g_value_set_boolean(value, atom_text_editor_widget_get_modified(self));
       break;
+    case PROP_PATH:
+      g_value_take_string(value, atom_text_editor_widget_get_path(self));
+      break;
     case PROP_CURSOR_POSITION:
       g_value_take_string(value, atom_text_editor_widget_get_cursor_position(self));
       break;
@@ -795,6 +802,20 @@ gchar *atom_text_editor_widget_get_title(AtomTextEditorWidget *self) {
 gboolean atom_text_editor_widget_get_modified(AtomTextEditorWidget *self) {
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
   return priv->text_editor->isModified();
+}
+
+gchar *atom_text_editor_widget_get_path(AtomTextEditorWidget *self) {
+  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  std::string path;
+  if (optional<std::string> fullPath = priv->text_editor->getPath()) {
+    path = fsPlus::tildify(*fullPath);
+  } else {
+    path = priv->text_editor->getTitle();
+  }
+  if (priv->text_editor->isModified()) {
+    path += '*';
+  }
+  return g_strdup(path.c_str());
 }
 
 gchar *atom_text_editor_widget_get_cursor_position(AtomTextEditorWidget *self) {

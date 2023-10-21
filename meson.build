@@ -6,6 +6,7 @@ executable(
   'src/window.vala',
   'src/notebook.vala',
   'src/text-editor-container.vala',
+  'src/statusbar.vala',
   'src/atom.vapi',
   'src/text-editor-widget.cc',
   import('gnome').compile_resources(
