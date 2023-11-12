@@ -36,6 +36,7 @@ class Notebook : Gtk.Notebook {
 
     var center_box = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 4);
     var label = new Gtk.Label(null);
+    label.ellipsize = Pango.EllipsizeMode.END;
     container.get_text_editor().bind_property("title", label, "label", BindingFlags.SYNC_CREATE);
     center_box.pack_start(label);
     var modified_image = new Gtk.Image.from_icon_name("media-record-symbolic", Gtk.IconSize.MENU);

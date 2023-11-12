@@ -9,6 +9,7 @@ class Statusbar : Gtk.Box {
     Object(orientation: Gtk.Orientation.HORIZONTAL, spacing: 2);
 
     var path_label = new Gtk.Label(null);
+    path_label.ellipsize = Pango.EllipsizeMode.END;
     text_editor_widget.bind_property("path", path_label, "label", BindingFlags.SYNC_CREATE);
     pack_start(pack(path_label), false);
 
