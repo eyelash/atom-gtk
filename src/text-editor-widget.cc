@@ -823,7 +823,7 @@ gchar *atom_text_editor_widget_get_cursor_position(AtomTextEditorWidget *self) {
   Point position = priv->text_editor->getCursorBufferPosition();
   double row = position.row + 1;
   double column = position.column + 1;
-  return g_strdup_printf("%.0f:%.0f", row, column);
+  return g_strdup_printf("%g:%g", row, column);
 }
 
 gchar *atom_text_editor_widget_get_selection_count(AtomTextEditorWidget *self) {
@@ -835,7 +835,7 @@ gchar *atom_text_editor_widget_get_selection_count(AtomTextEditorWidget *self) {
     lineCount -= 1;
   }
   if (count > 0) {
-    return g_strdup_printf("(%.0f, %.0f)", lineCount, count);
+    return g_strdup_printf("%g:%g", lineCount, count);
   } else {
     return g_strdup("");
   }
