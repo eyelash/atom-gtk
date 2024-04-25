@@ -71,11 +71,6 @@ public:
   void increment_generation() {
     generation++;
   }
-  template <class F> void transact(F f) {
-    generation++;
-    f();
-    collect_garbage();
-  }
   Layout get_layout(Component *self, const DisplayLayer::ScreenLine &screen_line) {
     auto iterator = cache.find(screen_line);
     if (iterator != cache.end()) {
