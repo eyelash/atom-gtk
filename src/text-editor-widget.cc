@@ -32,7 +32,6 @@ extern "C" TreeSitterGrammar *atom_language_rust();
 #define LINE_HEIGHT_FACTOR 1.5
 #define CURSOR_BLINK_PERIOD 800
 
-static void atom_text_editor_widget_dispose(GObject *);
 static void atom_text_editor_widget_finalize(GObject *);
 static void atom_text_editor_widget_set_property(GObject *, guint, const GValue *, GParamSpec *);
 static void atom_text_editor_widget_get_property(GObject *, guint, GValue *, GParamSpec *);
@@ -399,7 +398,6 @@ static void set_accels_for_signal(GtkBindingSet *binding_set, const gchar *signa
 }
 
 static void atom_text_editor_widget_class_init(AtomTextEditorWidgetClass *klass) {
-  G_OBJECT_CLASS(klass)->dispose = atom_text_editor_widget_dispose;
   G_OBJECT_CLASS(klass)->finalize = atom_text_editor_widget_finalize;
   G_OBJECT_CLASS(klass)->set_property = atom_text_editor_widget_set_property;
   G_OBJECT_CLASS(klass)->get_property = atom_text_editor_widget_get_property;
@@ -638,18 +636,12 @@ static void atom_text_editor_widget_init(AtomTextEditorWidget *self) {
   gtk_widget_add_events(GTK_WIDGET(self), GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK);
 }
 
-static void atom_text_editor_widget_dispose(GObject *object) {
-  AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(object);
-  AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
-  g_clear_object(&priv->drag_gesture);
-  g_clear_object(&priv->multipress_gesture);
-  g_clear_object(&priv->im_context);
-  G_OBJECT_CLASS(atom_text_editor_widget_parent_class)->dispose(object);
-}
-
 static void atom_text_editor_widget_finalize(GObject *object) {
   AtomTextEditorWidget *self = ATOM_TEXT_EDITOR_WIDGET(object);
   AtomTextEditorWidgetPrivate *priv = GET_PRIVATE(self);
+  g_object_unref(priv->drag_gesture);
+  g_object_unref(priv->multipress_gesture);
+  g_object_unref(priv->im_context);
   delete priv->style_cache;
   delete priv->layout_cache;
   pango_font_description_free(priv->font_description);
